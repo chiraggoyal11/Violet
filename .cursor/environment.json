@@ -1,0 +1,16 @@
+{
+  "name": "violet",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "node server.js"
+    },
+    {
+      "name": "frontend",
+      "command": "npm --prefix frontend run dev"
+    }
+  ],
+  "ports": [5000, 5173]
+}

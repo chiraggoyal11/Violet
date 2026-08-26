@@ -25,7 +25,7 @@ const s3=new S3Client({
 });
 
 const memory=multer.memoryStorage();
-const upload=multer({memory : memory});
+const upload=multer({ storage: memory });
 
 router.get('/', user_jwt, async (req, res, next) => {
     try {
@@ -87,13 +87,15 @@ router.get('/get/:id', async(req,res,next)=>{
         const {id} = req.params;
         const product=await Product.find({user_id : id});
         for (const prod of product){
-            const getObjectparams={
-                Bucket : bucketName,
-                Key : prod.Image
+            if (prod.Image) {
+                const getObjectparams={
+                    Bucket : bucketName,
+                    Key : prod.Image
+                }
+                const command=new GetObjectCommand(getObjectparams);
+                const url=await getSignedUrl(s3,command);
+                prod.ImageUrl=url;
             }
-            const command=new GetObjectCommand(getObjectparams);
-            const url=await getSignedUrl(s3,command);
-            prod.ImageUrl=url;
         };
         res.status(200).json({
             success : true,
