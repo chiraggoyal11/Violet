@@ -48,8 +48,8 @@ export default function SellPage() {
       <div className="panel wide">
         <h1>List a product</h1>
         <p className="lede">
-          Signed in as {user.username}. Product photos upload to S3-compatible
-          storage (MinIO locally, or AWS S3 in production).
+          Signed in as {user.username}. Photos upload to your AWS S3 bucket
+          (configured via environment secrets / config.env).
         </p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">

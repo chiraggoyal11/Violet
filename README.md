@@ -9,31 +9,36 @@ Handmade goods marketplace with an Express/MongoDB API and a React (Vite) fronte
 - **Frontend:** React + Vite + React Router (`frontend/`)
 - **Database:** MongoDB
 
+## Object storage (AWS S3)
+
+Use **real AWS S3** by setting these in `config/config.env` (gitignored) or as environment secrets:
+
+| Variable | Meaning |
+| --- | --- |
+| `BUCKET_NAME` | Your S3 bucket name |
+| `BUCKET_REGION` | e.g. `us-east-1` |
+| `ACCESS_KEY` | IAM access key id (or `AWS_ACCESS_KEY_ID`) |
+| `SECRET_ACCESS_KEY` | IAM secret (or `AWS_SECRET_ACCESS_KEY`) |
+
+Do **not** set `S3_ENDPOINT` for real AWS.
+
+IAM needs at least: `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket` on that bucket.
+
+Optional local fallback: MinIO via `S3_ENDPOINT=http://127.0.0.1:9000` (see comments in `config/config.env.example`).
+
 ## Quick start
 
 ```bash
-# 1. Install dependencies (+ MongoDB/MinIO binaries via Cloud Agent scripts)
 npm install
 npm --prefix frontend install
 cp config/config.env.example config/config.env
+# Edit config/config.env with Mongo URL + AWS keys + bucket
 
-# 2. Start MongoDB + MinIO (or: bash .cursor/start.sh)
-# 3. Run the apps
 npm start                 # API on http://localhost:5000
 npm run frontend          # UI on http://localhost:5173
 ```
 
 The Vite dev server proxies `/api` to the Express API.
-
-Default local object storage (from `config/config.env.example`):
-
-| Setting | Value |
-| --- | --- |
-| `S3_ENDPOINT` | `http://127.0.0.1:9000` (MinIO) |
-| `BUCKET_NAME` | `violet-products` |
-| `ACCESS_KEY` / `SECRET_ACCESS_KEY` | `minioadmin` / `minioadmin` |
-
-For **real AWS S3**, remove `S3_ENDPOINT` and set IAM access keys + bucket/region.
 
 ## Production
 

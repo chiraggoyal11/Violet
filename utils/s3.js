@@ -9,15 +9,25 @@ const {
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const bucketName = process.env.BUCKET_NAME;
-const bucketRegion = process.env.BUCKET_REGION || 'us-east-1';
-const accessKey = process.env.ACCESS_KEY;
-const secretAccessKey = process.env.SECRET_ACCESS_KEY;
+const bucketRegion =
+    process.env.BUCKET_REGION ||
+    process.env.AWS_REGION ||
+    process.env.AWS_DEFAULT_REGION ||
+    'us-east-1';
+const accessKey =
+    process.env.ACCESS_KEY ||
+    process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey =
+    process.env.SECRET_ACCESS_KEY ||
+    process.env.AWS_SECRET_ACCESS_KEY;
 const s3Endpoint = (process.env.S3_ENDPOINT || '').trim();
 
 const hasCredentials = Boolean(bucketName && accessKey && secretAccessKey);
 const usingPlaceholderCreds =
     String(accessKey || '').startsWith('local-dev') ||
-    String(secretAccessKey || '').startsWith('local-dev');
+    String(accessKey || '') === 'minioadmin' ||
+    String(secretAccessKey || '').startsWith('local-dev') ||
+    String(secretAccessKey || '') === 'minioadmin';
 
 // Enabled when credentials exist and either a custom endpoint (MinIO) is set
 // or real (non-placeholder) AWS credentials are provided.
@@ -48,7 +58,11 @@ async function ensureBucket() {
         bucketReady = true;
     } catch (error) {
         const status = error?.$metadata?.httpStatusCode;
-        if (status === 404 || error.name === 'NotFound' || error.Code === 'NoSuchBucket') {
+        // Only auto-create for local MinIO. On AWS, the bucket should already exist.
+        if (
+            s3Endpoint &&
+            (status === 404 || error.name === 'NotFound' || error.Code === 'NoSuchBucket')
+        ) {
             await s3.send(
                 new CreateBucketCommand({
                     Bucket: bucketName
@@ -56,9 +70,13 @@ async function ensureBucket() {
             );
             bucketReady = true;
             console.log(`Created S3 bucket: ${bucketName}`);
-        } else if (status === 301 || status === 403) {
-            // Bucket exists but region/ownership differs; proceed and let ops fail loudly.
+        } else if (status === 301 || status === 403 || status === 404) {
             bucketReady = true;
+            if (!s3Endpoint && status === 404) {
+                console.log(
+                    `S3 bucket "${bucketName}" was not found. Create it in AWS (region ${bucketRegion}) before uploading images.`
+                );
+            }
         } else {
             throw error;
         }
@@ -89,7 +107,7 @@ async function attachImageUrls(products) {
 async function uploadProductImage(file) {
     if (!s3) {
         const err = new Error(
-            'Image upload is unavailable. Set S3_ENDPOINT (MinIO) or real AWS credentials in config/config.env.'
+            'Image upload is unavailable. Set AWS credentials (ACCESS_KEY / SECRET_ACCESS_KEY) and BUCKET_NAME in config/config.env or environment secrets.'
         );
         err.status = 503;
         throw err;
