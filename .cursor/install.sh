@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent repository bootstrap for Violet (API + frontend).
+# Idempotent repository bootstrap for Violet (API + frontend + MinIO).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -14,25 +14,27 @@ if ! command -v mongod >/dev/null 2>&1; then
   sudo apt-get install -y mongodb-org
 fi
 
+# MinIO (local S3-compatible object storage)
+if ! command -v minio >/dev/null 2>&1; then
+  echo "Installing MinIO server..."
+  curl -fsSL https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
+  sudo install /tmp/minio /usr/local/bin/minio
+fi
+if ! command -v mc >/dev/null 2>&1; then
+  echo "Installing MinIO client (mc)..."
+  curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
+  sudo install /tmp/mc /usr/local/bin/mc
+fi
+
+sudo mkdir -p /data/minio
+sudo chown -R "$(id -u):$(id -g)" /data/minio
+
 npm install
 npm --prefix frontend install
 
 if [ ! -f config/config.env ]; then
   echo "Creating config/config.env from config/config.env.example..."
-  if [ -f config/config.env.example ]; then
-    cp config/config.env.example config/config.env
-  else
-    cat > config/config.env <<'EOF'
-PORT=5000
-MONGO=mongodb://127.0.0.1:27017/violet
-jwtSecret=local_dev_jwt_secret_change_me
-CORS_ORIGIN=http://localhost:5173
-BUCKET_NAME=violet-local-dev
-BUCKET_REGION=us-east-1
-ACCESS_KEY=local-dev-access-key
-SECRET_ACCESS_KEY=local-dev-secret-key
-EOF
-  fi
+  cp config/config.env.example config/config.env
 fi
 
 echo "install.sh complete."

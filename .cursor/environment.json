@@ -12,5 +12,5 @@
       "command": "npm --prefix frontend run dev"
     }
   ],
-  "ports": [5000, 5173]
+  "ports": [5000, 5173, 9000, 9001]
 }

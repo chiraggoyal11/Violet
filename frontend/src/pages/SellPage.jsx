@@ -48,8 +48,8 @@ export default function SellPage() {
       <div className="panel wide">
         <h1>List a product</h1>
         <p className="lede">
-          Signed in as {user.username}. Image upload needs AWS S3 credentials on
-          the server — leave the file empty to list without a photo.
+          Signed in as {user.username}. Product photos upload to S3-compatible
+          storage (MinIO locally, or AWS S3 in production).
         </p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">

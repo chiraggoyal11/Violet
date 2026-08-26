@@ -26,6 +26,15 @@ connectDB();
 app.use('/api/violet/auth', require('./routes/user'));
 app.use('/api/violet/products', require('./routes/product'));
 
+const { s3Configured, ensureBucket } = require('./utils/s3');
+if (s3Configured) {
+    ensureBucket().catch((err) => {
+        console.log('S3 bucket warmup failed:', err.message);
+    });
+} else {
+    console.log('S3 disabled — set S3_ENDPOINT or real AWS credentials to enable image uploads');
+}
+
 const frontendDist = path.join(__dirname, 'frontend', 'dist');
 if (fs.existsSync(frontendDist)) {
     app.use(express.static(frontendDist));
