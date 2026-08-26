@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Idempotent repository bootstrap for the Violet API.
-# Installs MongoDB (if needed), Node dependencies, and a local dev config file.
+# Idempotent repository bootstrap for Violet (API + frontend + MinIO).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# 1. Install MongoDB Community Server if it is not already present.
 if ! command -v mongod >/dev/null 2>&1; then
   echo "Installing MongoDB Community Server..."
   curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc \
@@ -16,26 +14,27 @@ if ! command -v mongod >/dev/null 2>&1; then
   sudo apt-get install -y mongodb-org
 fi
 
-# 2. Node dependencies.
+# MinIO (local S3-compatible object storage)
+if ! command -v minio >/dev/null 2>&1; then
+  echo "Installing MinIO server..."
+  curl -fsSL https://dl.min.io/server/minio/release/linux-amd64/minio -o /tmp/minio
+  sudo install /tmp/minio /usr/local/bin/minio
+fi
+if ! command -v mc >/dev/null 2>&1; then
+  echo "Installing MinIO client (mc)..."
+  curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc
+  sudo install /tmp/mc /usr/local/bin/mc
+fi
+
+sudo mkdir -p /data/minio
+sudo chown -R "$(id -u):$(id -g)" /data/minio
+
 npm install
+npm --prefix frontend install
 
-# 3. Generate a local development config if absent.
-#    config/config.env is gitignored; these are placeholder dev values.
-#    Replace the AWS values with real credentials to exercise product-image (S3) routes.
 if [ ! -f config/config.env ]; then
-  echo "Creating config/config.env with local development defaults..."
-  cat > config/config.env <<'EOF'
-PORT=5000
-MONGO=mongodb://127.0.0.1:27017/violet
-jwtSecret=local_dev_jwt_secret_change_me
-
-# AWS S3 (placeholder values for local dev; product image upload/read routes
-# require real AWS credentials to function).
-BUCKET_NAME=violet-local-dev
-BUCKET_REGION=us-east-1
-ACCESS_KEY=local-dev-access-key
-SECRET_ACCESS_KEY=local-dev-secret-key
-EOF
+  echo "Creating config/config.env from config/config.env.example..."
+  cp config/config.env.example config/config.env
 fi
 
 echo "install.sh complete."
