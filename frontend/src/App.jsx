@@ -1,14 +1,18 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider } from './AuthContext';
 import Header from './components/Header';
+import CartPage from './pages/CartPage';
 import CatalogPage from './pages/CatalogPage';
+import FavoritesPage from './pages/FavoritesPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import MinePage from './pages/MinePage';
+import OrdersPage from './pages/OrdersPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import RegisterPage from './pages/RegisterPage';
 import SellPage from './pages/SellPage';
+import SellerDashboardPage from './pages/SellerDashboardPage';
 
 function Shell() {
   const location = useLocation();
@@ -26,7 +30,11 @@ function Shell() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/sell" element={<SellPage />} />
           <Route path="/mine" element={<MinePage />} />
+          <Route path="/seller" element={<SellerDashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/favorites" element={<FavoritesPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

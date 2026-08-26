@@ -3,11 +3,15 @@ import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
+const CATEGORIES = ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+
 export default function SellPage() {
   const { user, token, booting } = useAuth();
   const [name, setName] = useState('');
   const [detail, setDetail] = useState('');
   const [price, setPrice] = useState('');
+  const [category, setCategory] = useState('Other');
+  const [stock, setStock] = useState(1);
   const [imageFile, setImageFile] = useState(null);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
@@ -27,6 +31,8 @@ export default function SellPage() {
         name: name.trim(),
         detail: detail.trim(),
         price: price.trim(),
+        category,
+        stock,
         imageFile,
       });
       if (!data.success) throw new Error(data.msg || 'Could not add product');
@@ -34,6 +40,8 @@ export default function SellPage() {
       setName('');
       setDetail('');
       setPrice('');
+      setCategory('Other');
+      setStock(1);
       setImageFile(null);
       e.target.reset?.();
     } catch (err) {
@@ -48,18 +56,13 @@ export default function SellPage() {
       <div className="panel wide">
         <h1>List a product</h1>
         <p className="lede">
-          Signed in as {user.username}. Photos upload to your AWS S3 bucket
-          (configured via environment secrets / config.env).
+          Signed in as {user.username}. Photos are compressed in the browser, then
+          uploaded to your AWS S3 bucket.
         </p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">
             <label htmlFor="name">Product name</label>
-            <input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+            <input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div className="form-field">
             <label htmlFor="detail">Details</label>
@@ -79,6 +82,30 @@ export default function SellPage() {
               onChange={(e) => setPrice(e.target.value)}
               placeholder="19.99"
               required
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="category">Category</label>
+            <select
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-field">
+            <label htmlFor="stock">Stock</label>
+            <input
+              id="stock"
+              type="number"
+              min="0"
+              value={stock}
+              onChange={(e) => setStock(Number(e.target.value))}
             />
           </div>
           <div className="form-field">

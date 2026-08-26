@@ -2,198 +2,344 @@ const express = require('express');
 const router = express.Router();
 const Product = require('../models/product');
 const user_jwt = require('../middleware/user_jwt');
+const { isValidPrice } = require('../middleware/validate');
 const multer = require('multer');
 const {
-    attachImageUrls,
-    uploadProductImage,
-    deleteProductImage
+  attachImageUrls,
+  uploadProductImage
 } = require('../utils/s3');
 
 const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 function parsePagination(query) {
-    const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 12));
-    const skip = (page - 1) * limit;
-    return { page, limit, skip };
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 12));
+  const skip = (page - 1) * limit;
+  return { page, limit, skip };
 }
 
+function buildListQuery(query, { includeDeleted = false } = {}) {
+  const queryObject = {};
+  if (!includeDeleted) {
+    queryObject.status = { $ne: 'deleted' };
+  }
+  if (query.status === 'active' || query.status === 'sold') {
+    queryObject.status = query.status;
+  }
+  if (query.name) {
+    queryObject.Product_Name = { $regex: query.name, $options: 'i' };
+  }
+  if (query.category && Product.CATEGORIES.includes(query.category)) {
+    queryObject.category = query.category;
+  }
+  const min = query.minPrice !== undefined ? Number(query.minPrice) : null;
+  const max = query.maxPrice !== undefined ? Number(query.maxPrice) : null;
+  if ((min !== null && Number.isFinite(min)) || (max !== null && Number.isFinite(max))) {
+    // Price stored as string — compare numerically via $expr after fetch is heavy;
+    // keep simple regex-free filter using $toDouble when possible.
+    const priceExpr = { $toDouble: { $ifNull: ['$Price', '0'] } };
+    const and = [];
+    if (min !== null && Number.isFinite(min)) and.push({ $gte: [priceExpr, min] });
+    if (max !== null && Number.isFinite(max)) and.push({ $lte: [priceExpr, max] });
+    queryObject.$expr = and.length === 1 ? and[0] : { $and: and };
+  }
+  return queryObject;
+}
+
+function sortSpec(sort) {
+  switch (sort) {
+    case 'price_asc':
+      return { Price: 1 };
+    case 'price_desc':
+      return { Price: -1 };
+    case 'oldest':
+      return { _id: 1 };
+    case 'newest':
+    default:
+      return { _id: -1 };
+  }
+}
+
+router.get('/meta/categories', (req, res) => {
+  return res.status(200).json({ success: true, categories: Product.CATEGORIES });
+});
+
 router.get('/', async (req, res) => {
-    try {
-        const queryObject = {};
-        if (req.query.name) {
-            queryObject.Product_Name = { $regex: req.query.name, $options: 'i' };
+  try {
+    const queryObject = buildListQuery(req.query);
+    const { page, limit, skip } = parsePagination(req.query);
+    const sort = sortSpec(req.query.sort);
+
+    let products;
+    let total;
+
+    // Price sort on string fields is unreliable; use aggregation when sorting by price
+    if (req.query.sort === 'price_asc' || req.query.sort === 'price_desc') {
+      const direction = req.query.sort === 'price_asc' ? 1 : -1;
+      const pipeline = [
+        { $match: queryObject },
+        { $addFields: { priceNum: { $toDouble: { $ifNull: ['$Price', '0'] } } } },
+        { $sort: { priceNum: direction } },
+        {
+          $facet: {
+            data: [{ $skip: skip }, { $limit: limit }],
+            total: [{ $count: 'count' }]
+          }
         }
-
-        const { page, limit, skip } = parsePagination(req.query);
-        const [products, total] = await Promise.all([
-            Product.find(queryObject).sort({ _id: -1 }).skip(skip).limit(limit),
-            Product.countDocuments(queryObject)
-        ]);
-
-        await attachImageUrls(products);
-
-        return res.status(200).json({
-            success: true,
-            product: products,
-            page,
-            limit,
-            total,
-            totalPages: Math.max(1, Math.ceil(total / limit))
-        });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to load products' });
+      ];
+      const [result] = await Product.aggregate(pipeline);
+      products = result.data || [];
+      total = result.total?.[0]?.count || 0;
+      // hydrate as mongoose docs-like plain objects for attachImageUrls
+    } else {
+      [products, total] = await Promise.all([
+        Product.find(queryObject).sort(sort).skip(skip).limit(limit),
+        Product.countDocuments(queryObject)
+      ]);
     }
+
+    await attachImageUrls(products);
+
+    return res.status(200).json({
+      success: true,
+      product: products,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      categories: Product.CATEGORIES
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load products' });
+  }
 });
 
 router.get('/detail/:id', async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) {
-            return res.status(404).json({ success: false, msg: 'Product not found' });
-        }
-        await attachImageUrls([product]);
-        return res.status(200).json({ success: true, product });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to load product' });
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product || product.status === 'deleted') {
+      return res.status(404).json({ success: false, msg: 'Product not found' });
     }
+    await attachImageUrls([product]);
+    return res.status(200).json({ success: true, product });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load product' });
+  }
 });
 
 router.get('/user/:userId', async (req, res) => {
-    try {
-        const products = await Product.find({ user_id: req.params.userId }).sort({ _id: -1 });
-        await attachImageUrls(products);
-        return res.status(200).json({ success: true, product: products });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to load products' });
-    }
+  try {
+    const includeDeleted = req.query.includeDeleted === '1';
+    const filter = { user_id: req.params.userId };
+    if (!includeDeleted) filter.status = { $ne: 'deleted' };
+    const products = await Product.find(filter).sort({ _id: -1 });
+    await attachImageUrls(products);
+    return res.status(200).json({ success: true, product: products });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load products' });
+  }
+});
+
+router.get('/seller/stats', user_jwt, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [active, sold, deleted, products] = await Promise.all([
+      Product.countDocuments({ user_id: userId, status: 'active' }),
+      Product.countDocuments({ user_id: userId, status: 'sold' }),
+      Product.countDocuments({ user_id: userId, status: 'deleted' }),
+      Product.find({ user_id: userId, status: { $ne: 'deleted' } })
+    ]);
+    const revenue = products
+      .filter((p) => p.status === 'sold')
+      .reduce((sum, p) => sum + (Number(p.Price) || 0), 0);
+
+    return res.status(200).json({
+      success: true,
+      stats: {
+        active,
+        sold,
+        deleted,
+        listings: active + sold,
+        revenue: revenue.toFixed(2)
+      }
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load seller stats' });
+  }
 });
 
 router.post('/', user_jwt, upload.single('Product_Image'), async (req, res) => {
-    try {
-        const Name = (req.body.Product_Name || '').trim();
-        const Detail = (req.body.Product_Detail || '').trim();
-        const Price = (req.body.Price || '').trim();
+  try {
+    const Name = (req.body.Product_Name || '').trim();
+    const Detail = (req.body.Product_Detail || '').trim();
+    const Price = (req.body.Price || '').trim();
+    const category = (req.body.category || 'Other').trim();
+    const stock = Math.max(0, parseInt(req.body.stock, 10) || 1);
 
-        if (!Name || !Detail || !Price) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Product name, detail, and price are required'
-            });
-        }
-
-        const prod = new Product({
-            user_id: req.user.id,
-            Product_Name: Name,
-            Product_Detail: Detail,
-            Price
-        });
-
-        if (req.file) {
-            try {
-                prod.Image = await uploadProductImage(req.file);
-            } catch (error) {
-                return res.status(error.status || 500).json({
-                    success: false,
-                    msg: error.message || 'Image upload failed'
-                });
-            }
-        }
-
-        await prod.save();
-        return res.status(200).json({
-            success: true,
-            msg: 'Product added',
-            product: prod
-        });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to add product' });
+    if (!Name || !Detail || !Price) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Product name, detail, and price are required'
+      });
     }
+    if (!isValidPrice(Price)) {
+      return res.status(400).json({ success: false, msg: 'Price must be a valid number' });
+    }
+    if (!Product.CATEGORIES.includes(category)) {
+      return res.status(400).json({ success: false, msg: 'Invalid category' });
+    }
+
+    const prod = new Product({
+      user_id: req.user.id,
+      Product_Name: Name,
+      Product_Detail: Detail,
+      Price,
+      category,
+      stock,
+      status: stock === 0 ? 'sold' : 'active'
+    });
+
+    if (req.file) {
+      try {
+        prod.Image = await uploadProductImage(req.file);
+      } catch (error) {
+        return res.status(error.status || 500).json({
+          success: false,
+          msg: error.message || 'Image upload failed'
+        });
+      }
+    }
+
+    await prod.save();
+    return res.status(200).json({
+      success: true,
+      msg: 'Product added',
+      product: prod
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to add product' });
+  }
 });
 
 router.put('/delete/bulk', user_jwt, async (req, res) => {
-    try {
-        const ids = Array.isArray(req.body.id) ? req.body.id : [];
-        if (ids.length === 0) {
-            return res.status(400).json({ success: false, msg: 'No product ids provided' });
-        }
-
-        const deleted = [];
-        const errors = [];
-
-        for (const id of ids) {
-            const product = await Product.findById(id);
-            if (!product) {
-                errors.push({ id, msg: "Product doesn't exist." });
-                continue;
-            }
-            if (String(product.user_id) !== String(req.user.id)) {
-                errors.push({ id, msg: 'Not allowed to delete this product' });
-                continue;
-            }
-
-            await Product.findByIdAndDelete(id);
-            deleted.push(id);
-            await deleteProductImage(product.Image);
-        }
-
-        if (deleted.length === 0) {
-            return res.status(400).json({
-                success: false,
-                msg: 'No products deleted.',
-                errors
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            msg: 'Product deleted.',
-            deleted,
-            errors: errors.length ? errors : undefined
-        });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to delete products' });
+  try {
+    const ids = Array.isArray(req.body.id) ? req.body.id : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, msg: 'No product ids provided' });
     }
+
+    const deleted = [];
+    const errors = [];
+
+    for (const id of ids) {
+      const product = await Product.findById(id);
+      if (!product || product.status === 'deleted') {
+        errors.push({ id, msg: "Product doesn't exist." });
+        continue;
+      }
+      if (String(product.user_id) !== String(req.user.id)) {
+        errors.push({ id, msg: 'Not allowed to delete this product' });
+        continue;
+      }
+
+      product.status = 'deleted';
+      product.deletedAt = new Date();
+      await product.save();
+      deleted.push(id);
+      // Keep S3 object for soft-delete recovery; hard cleanup optional later
+    }
+
+    if (deleted.length === 0) {
+      return res.status(400).json({
+        success: false,
+        msg: 'No products deleted.',
+        errors
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      msg: 'Product deleted.',
+      deleted,
+      errors: errors.length ? errors : undefined
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to delete products' });
+  }
+});
+
+router.put('/:id/sold', user_jwt, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product || product.status === 'deleted') {
+      return res.status(404).json({ success: false, msg: "Product doesn't exist." });
+    }
+    if (String(product.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, msg: 'Not allowed' });
+    }
+    product.status = 'sold';
+    product.stock = 0;
+    await product.save();
+    return res.status(200).json({ success: true, msg: 'Marked as sold', product });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to update product' });
+  }
 });
 
 router.put('/:id', user_jwt, async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) {
-            return res.status(404).json({ success: false, msg: "Product doesn't exist." });
-        }
-        if (String(product.user_id) !== String(req.user.id)) {
-            return res.status(403).json({ success: false, msg: 'Not allowed to update this product' });
-        }
-
-        const allowed = ['Product_Name', 'Product_Detail', 'Price'];
-        for (const key of allowed) {
-            if (req.body[key] !== undefined) {
-                product[key] = String(req.body[key]).trim();
-            }
-        }
-
-        if (!product.Product_Name || !product.Product_Detail || !product.Price) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Product name, detail, and price are required'
-            });
-        }
-
-        await product.save();
-        return res.status(200).json({ success: true, msg: 'Updated', product });
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to update product' });
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product || product.status === 'deleted') {
+      return res.status(404).json({ success: false, msg: "Product doesn't exist." });
     }
+    if (String(product.user_id) !== String(req.user.id)) {
+      return res.status(403).json({
+        success: false,
+        msg: 'Not allowed to update this product'
+      });
+    }
+
+    const allowed = ['Product_Name', 'Product_Detail', 'Price', 'category', 'stock', 'status'];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        product[key] = typeof req.body[key] === 'string' ? String(req.body[key]).trim() : req.body[key];
+      }
+    }
+
+    if (!product.Product_Name || !product.Product_Detail || !product.Price) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Product name, detail, and price are required'
+      });
+    }
+    if (!isValidPrice(product.Price)) {
+      return res.status(400).json({ success: false, msg: 'Price must be a valid number' });
+    }
+    if (product.category && !Product.CATEGORIES.includes(product.category)) {
+      return res.status(400).json({ success: false, msg: 'Invalid category' });
+    }
+    if (product.stock !== undefined) {
+      product.stock = Math.max(0, Number(product.stock) || 0);
+      if (product.stock === 0 && product.status === 'active') product.status = 'sold';
+      if (product.stock > 0 && product.status === 'sold') product.status = 'active';
+    }
+
+    await product.save();
+    return res.status(200).json({ success: true, msg: 'Updated', product });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to update product' });
+  }
 });
 
 module.exports = router;
