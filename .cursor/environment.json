@@ -1,0 +1,12 @@
+{
+  "name": "violet",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "node server.js"
+    }
+  ],
+  "ports": [5000]
+}
