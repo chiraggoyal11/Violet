@@ -5,6 +5,8 @@ import CatalogPage from './pages/CatalogPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import MinePage from './pages/MinePage';
+import ProductDetailPage from './pages/ProductDetailPage';
+import ProfilePage from './pages/ProfilePage';
 import RegisterPage from './pages/RegisterPage';
 import SellPage from './pages/SellPage';
 
@@ -19,10 +21,12 @@ function Shell() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/catalog" element={<CatalogPage />} />
+          <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/sell" element={<SellPage />} />
           <Route path="/mine" element={<MinePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

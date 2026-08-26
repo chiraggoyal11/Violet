@@ -62,6 +62,9 @@ export function AuthProvider({ children }) {
       token,
       user,
       booting,
+      setUserSession(nextToken, nextUser) {
+        persist(nextToken, nextUser);
+      },
       async login(phone_no, password) {
         const data = await api.login({ phone_no, password });
         if (!data.success) throw new Error(data.msg || 'Login failed');

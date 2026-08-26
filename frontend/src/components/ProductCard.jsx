@@ -9,6 +9,8 @@ function formatPrice(price) {
   return `$${price}`;
 }
 
+export { formatPrice };
+
 export default function ProductCard({ product }) {
   const image = product.ImageUrl || null;
 
@@ -18,20 +20,7 @@ export default function ProductCard({ product }) {
         {image ? (
           <img src={image} alt={product.Product_Name} loading="lazy" />
         ) : (
-          <div
-            style={{
-              height: '100%',
-              display: 'grid',
-              placeItems: 'center',
-              color: '#5a3f72',
-              fontFamily: 'Syne, sans-serif',
-              fontWeight: 700,
-              padding: '1rem',
-              textAlign: 'center',
-            }}
-          >
-            {product.Product_Name}
-          </div>
+          <div className="product-fallback">{product.Product_Name}</div>
         )}
       </div>
       <div className="product-body">

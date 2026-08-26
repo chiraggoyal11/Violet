@@ -1,20 +1,22 @@
 {
-  "name": "server",
+  "name": "violet",
   "version": "1.0.0",
-  "description": "Violet API — product marketplace backend",
+  "description": "Violet marketplace — Express API + React frontend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
     "frontend": "npm --prefix frontend run dev",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm --prefix frontend run build",
+    "test": "node --test tests/*.test.js"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "colors": "^1.4.0",
     "morgan": "^1.10.0",
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.7",
+    "supertest": "^7.2.2"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.699.0",

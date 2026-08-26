@@ -15,6 +15,7 @@ export default function Header() {
           <>
             <NavLink to="/sell">Sell</NavLink>
             <NavLink to="/mine">My listings</NavLink>
+            <NavLink to="/profile">Profile</NavLink>
             <button type="button" className="linkish" onClick={logout}>
               Sign out
             </button>

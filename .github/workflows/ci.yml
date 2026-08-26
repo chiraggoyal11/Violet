@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'cursor/**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install API dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Run API tests
+        env:
+          MONGO_TEST: mongodb://127.0.0.1:27017/violet_ci
+          jwtSecret: ci_test_secret
+        run: npm test
+
+      - name: Build frontend
+        run: npm --prefix frontend run build

@@ -18,6 +18,9 @@ export default function HomePage() {
           <Link className="btn btn-secondary" to="/sell">
             Start selling
           </Link>
+          <Link className="btn btn-secondary" to="/login">
+            Sign in
+          </Link>
         </div>
       </div>
     </section>

@@ -25,19 +25,45 @@ npm run frontend          # UI on http://localhost:5173
 
 The Vite dev server proxies `/api` to the Express API.
 
-Product create/update/delete require a JWT (`Authorization: Bearer <token>`).
-Image upload is optional and only works when real AWS S3 credentials are set.
+## Production
+
+```bash
+npm run build             # builds frontend/dist
+npm start                 # Express serves API + the built UI on PORT
+```
+
+Or with Docker (requires `config/config.env` mounted or env vars):
+
+```bash
+docker build -t violet .
+docker run --rm -p 5000:5000 --env-file config/config.env violet
+```
+
+## Tests
+
+```bash
+# MongoDB must be running
+npm test
+```
+
+## API
+
+| Area | Base path |
+| --- | --- |
+| Auth / profile | `/api/violet/auth` |
+| Products | `/api/violet/products` |
+
+Product create/update/delete require `Authorization: Bearer <token>`.
+Image upload is optional and only works with real AWS S3 credentials.
 
 ## Frontend routes
 
 | Path | Purpose |
 | --- | --- |
 | `/` | Branded landing |
-| `/catalog` | Browse / search products |
+| `/catalog` | Browse / search / paginate |
+| `/product/:id` | Product detail |
 | `/login`, `/register` | Auth |
-| `/sell` | Create a listing (signed in) |
-| `/mine` | Manage your listings |
-
-## API
-
-All routes are under `/api/violet/auth` (register, login, product CRUD).
+| `/sell` | Create a listing |
+| `/mine` | Edit / remove your listings |
+| `/profile` | Edit display name |
