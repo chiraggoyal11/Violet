@@ -4,9 +4,13 @@
   "start": "bash .cursor/start.sh",
   "terminals": [
     {
-      "name": "server",
+      "name": "api",
       "command": "node server.js"
+    },
+    {
+      "name": "frontend",
+      "command": "npm --prefix frontend run dev"
     }
   ],
-  "ports": [5000]
+  "ports": [5000, 5173, 9000, 9001]
 }
