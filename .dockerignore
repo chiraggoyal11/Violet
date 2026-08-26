@@ -1,7 +1,0 @@
-node_modules
-frontend/node_modules
-frontend/dist
-config/config.env
-*.env
-!config/config.env.example
-.DS_Store
