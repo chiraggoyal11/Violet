@@ -2,7 +2,7 @@ const API_BASE = '/api/violet/auth';
 
 async function request(path, { method = 'GET', body, token, formData } = {}) {
   const headers = {};
-  if (token) headers.Authorization = token;
+  if (token) headers.Authorization = `Bearer ${token}`;
   if (body && !formData) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -40,17 +40,16 @@ export const api = {
     return request(`/get${q}`);
   },
   listMyProducts: (userId) => request(`/get/${userId}`),
-  addProduct: ({ userId, name, detail, price, imageFile }) => {
+  addProduct: ({ token, name, detail, price, imageFile }) => {
     const form = new FormData();
-    form.append('user_id', userId);
     form.append('Product_Name', name);
     form.append('Product_Detail', detail);
     form.append('Price', price);
     if (imageFile) form.append('Product_Image', imageFile);
-    return request('/add', { method: 'POST', body: form, formData: true });
+    return request('/add', { method: 'POST', body: form, formData: true, token });
   },
-  updateProduct: (id, payload) =>
-    request(`/update/${id}`, { method: 'PUT', body: payload }),
-  deleteProducts: (ids) =>
-    request('/delete', { method: 'PUT', body: { id: ids } }),
+  updateProduct: (id, payload, token) =>
+    request(`/update/${id}`, { method: 'PUT', body: payload, token }),
+  deleteProducts: (ids, token) =>
+    request('/delete', { method: 'PUT', body: { id: ids }, token }),
 };

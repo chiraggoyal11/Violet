@@ -424,6 +424,19 @@ img {
   text-align: center;
 }
 
+.listing-manage {
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
+}
+
+.edit-form {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9rem;
+}
+
 .site-footer {
   padding: 1.5rem;
   text-align: center;

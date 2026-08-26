@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
 export default function SellPage() {
-  const { user, booting } = useAuth();
+  const { user, token, booting } = useAuth();
   const [name, setName] = useState('');
   const [detail, setDetail] = useState('');
   const [price, setPrice] = useState('');
@@ -23,7 +23,7 @@ export default function SellPage() {
     setOk('');
     try {
       const data = await api.addProduct({
-        userId: user._id,
+        token,
         name: name.trim(),
         detail: detail.trim(),
         price: price.trim(),

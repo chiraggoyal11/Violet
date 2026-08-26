@@ -1,2 +1,4 @@
 node_modules
-config.env
+config/config.env
+*.env
+!config/config.env.example

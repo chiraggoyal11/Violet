@@ -5,51 +5,95 @@ import { useAuth } from '../AuthContext';
 import ProductCard from '../components/ProductCard';
 
 export default function MinePage() {
-  const { user, booting } = useAuth();
+  const { user, token, booting } = useAuth();
   const [products, setProducts] = useState([]);
   const [error, setError] = useState('');
+  const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState({
+    Product_Name: '',
+    Product_Detail: '',
+    Price: '',
+  });
+
+  async function loadProducts() {
+    if (!user) return;
+    setLoading(true);
+    setError('');
+    try {
+      const data = await api.listMyProducts(user._id);
+      setProducts(data.product || []);
+    } catch (err) {
+      try {
+        const all = await api.listProducts();
+        setProducts((all.product || []).filter((p) => p.user_id === user._id));
+      } catch (fallbackErr) {
+        setError(fallbackErr.message || err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const data = await api.listMyProducts(user._id);
-        if (!cancelled) setProducts(data.product || []);
-      } catch (err) {
-        // S3 signed URL generation can fail without AWS creds; fall back to all products filtered client-side.
-        try {
-          const all = await api.listProducts();
-          if (!cancelled) {
-            setProducts((all.product || []).filter((p) => p.user_id === user._id));
-          }
-        } catch (fallbackErr) {
-          if (!cancelled) setError(fallbackErr.message || err.message);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadProducts();
   }, [user]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
 
+  function startEdit(product) {
+    setEditingId(product._id);
+    setDraft({
+      Product_Name: product.Product_Name || '',
+      Product_Detail: product.Product_Detail || '',
+      Price: product.Price || '',
+    });
+    setError('');
+    setOk('');
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    if (!editingId) return;
+    setBusyId(editingId);
+    setError('');
+    setOk('');
+    try {
+      const data = await api.updateProduct(
+        editingId,
+        {
+          Product_Name: draft.Product_Name.trim(),
+          Product_Detail: draft.Product_Detail.trim(),
+          Price: draft.Price.trim(),
+        },
+        token,
+      );
+      if (!data.success) throw new Error(data.msg || 'Update failed');
+      setProducts((prev) =>
+        prev.map((p) => (p._id === editingId ? { ...p, ...data.product } : p)),
+      );
+      setOk('Listing updated.');
+      setEditingId(null);
+    } catch (err) {
+      setError(err.message || 'Update failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function remove(id) {
     setBusyId(id);
     setError('');
+    setOk('');
     try {
-      await api.deleteProducts([id]);
+      await api.deleteProducts([id], token);
       setProducts((prev) => prev.filter((p) => p._id !== id));
+      if (editingId === id) setEditingId(null);
+      setOk('Listing removed.');
     } catch (err) {
-      // Delete may fail on S3 image cleanup with placeholder AWS keys; still remove from DB often fails.
       setError(err.message || 'Delete failed');
     } finally {
       setBusyId(null);
@@ -69,6 +113,7 @@ export default function MinePage() {
       </div>
 
       {error ? <p className="status error">{error}</p> : null}
+      {ok ? <p className="status ok">{ok}</p> : null}
       {loading ? <p className="empty">Loading your listings…</p> : null}
       {!loading && products.length === 0 ? (
         <p className="empty">You have not listed anything yet.</p>
@@ -76,16 +121,80 @@ export default function MinePage() {
 
       <div className="product-grid">
         {products.map((product) => (
-          <div key={product._id} style={{ display: 'grid', gap: '0.6rem' }}>
+          <div key={product._id} className="listing-manage">
             <ProductCard product={product} />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busyId === product._id}
-              onClick={() => remove(product._id)}
-            >
-              {busyId === product._id ? 'Removing…' : 'Remove'}
-            </button>
+            {editingId === product._id ? (
+              <form className="form edit-form" onSubmit={saveEdit}>
+                <div className="form-field">
+                  <label htmlFor={`name-${product._id}`}>Name</label>
+                  <input
+                    id={`name-${product._id}`}
+                    value={draft.Product_Name}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, Product_Name: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor={`detail-${product._id}`}>Details</label>
+                  <textarea
+                    id={`detail-${product._id}`}
+                    rows={3}
+                    value={draft.Product_Detail}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, Product_Detail: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor={`price-${product._id}`}>Price</label>
+                  <input
+                    id={`price-${product._id}`}
+                    value={draft.Price}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, Price: e.target.value }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="form-actions">
+                  <button
+                    className="btn btn-accent"
+                    type="submit"
+                    disabled={busyId === product._id}
+                  >
+                    {busyId === product._id ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => startEdit(product)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busyId === product._id}
+                  onClick={() => remove(product._id)}
+                >
+                  {busyId === product._id ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

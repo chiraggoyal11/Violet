@@ -18,20 +18,21 @@ npm install
 npm --prefix frontend install
 
 if [ ! -f config/config.env ]; then
-  echo "Creating config/config.env with local development defaults..."
-  cat > config/config.env <<'EOF'
+  echo "Creating config/config.env from config/config.env.example..."
+  if [ -f config/config.env.example ]; then
+    cp config/config.env.example config/config.env
+  else
+    cat > config/config.env <<'EOF'
 PORT=5000
 MONGO=mongodb://127.0.0.1:27017/violet
 jwtSecret=local_dev_jwt_secret_change_me
 CORS_ORIGIN=http://localhost:5173
-
-# AWS S3 (placeholder values for local dev; product image upload/read routes
-# require real AWS credentials to function).
 BUCKET_NAME=violet-local-dev
 BUCKET_REGION=us-east-1
 ACCESS_KEY=local-dev-access-key
 SECRET_ACCESS_KEY=local-dev-secret-key
 EOF
+  fi
 fi
 
 echo "install.sh complete."
