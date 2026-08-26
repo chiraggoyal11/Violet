@@ -16,6 +16,8 @@ export default function MinePage() {
     Product_Name: '',
     Product_Detail: '',
     Price: '',
+    category: 'Other',
+    stock: 1,
   });
 
   async function loadProducts() {
@@ -26,12 +28,7 @@ export default function MinePage() {
       const data = await api.listMyProducts(user._id);
       setProducts(data.product || []);
     } catch (err) {
-      try {
-        const all = await api.listProducts();
-        setProducts((all.product || []).filter((p) => p.user_id === user._id));
-      } catch (fallbackErr) {
-        setError(fallbackErr.message || err.message);
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -50,6 +47,8 @@ export default function MinePage() {
       Product_Name: product.Product_Name || '',
       Product_Detail: product.Product_Detail || '',
       Price: product.Price || '',
+      category: product.category || 'Other',
+      stock: product.stock ?? 1,
     });
     setError('');
     setOk('');
@@ -68,10 +67,11 @@ export default function MinePage() {
           Product_Name: draft.Product_Name.trim(),
           Product_Detail: draft.Product_Detail.trim(),
           Price: draft.Price.trim(),
+          category: draft.category,
+          stock: Number(draft.stock),
         },
         token,
       );
-      if (!data.success) throw new Error(data.msg || 'Update failed');
       setProducts((prev) =>
         prev.map((p) => (p._id === editingId ? { ...p, ...data.product } : p)),
       );
@@ -79,6 +79,22 @@ export default function MinePage() {
       setEditingId(null);
     } catch (err) {
       setError(err.message || 'Update failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function markSold(id) {
+    setBusyId(id);
+    setError('');
+    try {
+      const data = await api.markSold(id, token);
+      setProducts((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, ...data.product } : p)),
+      );
+      setOk('Marked as sold.');
+    } catch (err) {
+      setError(err.message);
     } finally {
       setBusyId(null);
     }
@@ -105,11 +121,16 @@ export default function MinePage() {
       <div className="section-heading">
         <div>
           <h2>My listings</h2>
-          <p>Manage the products you have published as {user.username}.</p>
+          <p>Manage products you published as {user.username}.</p>
         </div>
-        <Link className="btn btn-primary" to="/sell">
-          New listing
-        </Link>
+        <div className="form-actions">
+          <Link className="btn btn-secondary" to="/seller">
+            Dashboard
+          </Link>
+          <Link className="btn btn-primary" to="/sell">
+            New listing
+          </Link>
+        </div>
       </div>
 
       {error ? <p className="status error">{error}</p> : null}
@@ -126,9 +147,8 @@ export default function MinePage() {
             {editingId === product._id ? (
               <form className="form edit-form" onSubmit={saveEdit}>
                 <div className="form-field">
-                  <label htmlFor={`name-${product._id}`}>Name</label>
+                  <label>Name</label>
                   <input
-                    id={`name-${product._id}`}
                     value={draft.Product_Name}
                     onChange={(e) =>
                       setDraft((d) => ({ ...d, Product_Name: e.target.value }))
@@ -137,9 +157,8 @@ export default function MinePage() {
                   />
                 </div>
                 <div className="form-field">
-                  <label htmlFor={`detail-${product._id}`}>Details</label>
+                  <label>Details</label>
                   <textarea
-                    id={`detail-${product._id}`}
                     rows={3}
                     value={draft.Product_Detail}
                     onChange={(e) =>
@@ -149,23 +168,42 @@ export default function MinePage() {
                   />
                 </div>
                 <div className="form-field">
-                  <label htmlFor={`price-${product._id}`}>Price</label>
+                  <label>Price</label>
                   <input
-                    id={`price-${product._id}`}
                     value={draft.Price}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, Price: e.target.value }))
-                    }
+                    onChange={(e) => setDraft((d) => ({ ...d, Price: e.target.value }))}
                     required
                   />
                 </div>
-                <div className="form-actions">
-                  <button
-                    className="btn btn-accent"
-                    type="submit"
-                    disabled={busyId === product._id}
+                <div className="form-field">
+                  <label>Category</label>
+                  <select
+                    value={draft.category}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, category: e.target.value }))
+                    }
                   >
-                    {busyId === product._id ? 'Saving…' : 'Save'}
+                    {['Home', 'Fashion', 'Art', 'Food', 'Other'].map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>Stock</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={draft.stock}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, stock: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="form-actions">
+                  <button className="btn btn-accent" type="submit" disabled={busyId === product._id}>
+                    Save
                   </button>
                   <button
                     className="btn btn-secondary"
@@ -178,20 +216,26 @@ export default function MinePage() {
               </form>
             ) : (
               <div className="form-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => startEdit(product)}
-                >
+                <button type="button" className="btn btn-secondary" onClick={() => startEdit(product)}>
                   Edit
                 </button>
+                {product.status !== 'sold' ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busyId === product._id}
+                    onClick={() => markSold(product._id)}
+                  >
+                    Mark sold
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn btn-secondary"
                   disabled={busyId === product._id}
                   onClick={() => remove(product._id)}
                 >
-                  {busyId === product._id ? 'Removing…' : 'Remove'}
+                  Remove
                 </button>
               </div>
             )}

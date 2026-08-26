@@ -13,8 +13,12 @@ export default function Header() {
         <NavLink to="/catalog">Catalog</NavLink>
         {user ? (
           <>
+            <NavLink to="/cart">Cart</NavLink>
+            <NavLink to="/favorites">Favorites</NavLink>
+            <NavLink to="/orders">Orders</NavLink>
             <NavLink to="/sell">Sell</NavLink>
             <NavLink to="/mine">My listings</NavLink>
+            <NavLink to="/seller">Dashboard</NavLink>
             <NavLink to="/profile">Profile</NavLink>
             <button type="button" className="linkish" onClick={logout}>
               Sign out
