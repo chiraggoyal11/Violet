@@ -53,7 +53,11 @@ export default function ForgotPasswordPage() {
             <button className="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Sending…' : 'Send reset code'}
             </button>
-            <Link className="btn btn-secondary" to="/reset-password">
+            <Link
+              className="btn btn-secondary"
+              to="/reset-password"
+              state={{ phone_no: phone_no.trim() }}
+            >
               Enter code
             </Link>
           </div>

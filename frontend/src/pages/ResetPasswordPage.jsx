@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [phone_no, setPhone] = useState('');
+  const location = useLocation();
+  const [phone_no, setPhone] = useState(location.state?.phone_no || '');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

@@ -37,6 +37,14 @@ const authLimiter = rateLimit({
 
 connectDB();
 
+app.get('/api/violet/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    version: 2,
+    features: ['multi-image', 'messages', 'notifications', 'password-reset']
+  });
+});
+
 app.use('/api/violet/auth', authLimiter, require('./routes/user'));
 app.use('/api/violet/products', require('./routes/product'));
 app.use('/api/violet/favorites', require('./routes/favorites'));

@@ -1,5 +1,4 @@
 import { useEffect, useState, useTransition } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 
@@ -149,27 +148,20 @@ export default function CatalogPage() {
       </form>
 
       {error ? <p className="status error">{error}</p> : null}
-      {loading || isPending ? <SkeletonGrid /> : null}
 
-      {!loading && !error && products.length === 0 ? (
+      {loading || isPending ? (
+        <SkeletonGrid />
+      ) : products.length === 0 ? (
         <p className="empty">No products match these filters. Try broadening your search.</p>
-      ) : null}
-
-      {!loading ? (
+      ) : (
         <div className="product-grid">
           {products.map((product) => (
-            <Link
-              key={product._id}
-              to={`/product/${product._id}`}
-              className="product-link"
-            >
-              <ProductCard product={product} />
-            </Link>
+            <ProductCard key={product._id} product={product} to={`/product/${product._id}`} />
           ))}
         </div>
-      ) : null}
+      )}
 
-      {total > 0 ? (
+      {total > 0 && !loading && !isPending ? (
         <div className="pager">
           <button
             type="button"

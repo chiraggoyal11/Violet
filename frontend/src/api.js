@@ -24,7 +24,13 @@ async function request(base, path, { method = 'GET', body, token, formData } = {
     try {
       data = JSON.parse(text);
     } catch {
-      data = { msg: text };
+      const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const staleRoute = /cannot (get|post|put|delete)/i.test(plain);
+      data = {
+        msg: staleRoute
+          ? 'API server is out of date — restart it (npm start) and try again.'
+          : plain.slice(0, 200) || `Request failed (${res.status})`,
+      };
     }
   }
 

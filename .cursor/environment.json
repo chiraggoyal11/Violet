@@ -5,7 +5,7 @@
   "terminals": [
     {
       "name": "api",
-      "command": "node server.js"
+      "command": "RESET_DEV_MODE=true node server.js"
     },
     {
       "name": "frontend",

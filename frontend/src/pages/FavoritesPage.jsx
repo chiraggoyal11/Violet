@@ -41,19 +41,23 @@ export default function FavoritesPage() {
         </div>
       </div>
       {error ? <p className="status error">{error}</p> : null}
-      {loading ? <SkeletonGrid count={4} /> : null}
-      {!loading && products.length === 0 ? (
+      {loading ? (
+        <SkeletonGrid count={4} />
+      ) : products.length === 0 ? (
         <p className="empty">
           No favorites yet. <Link to="/catalog">Find something you love</Link>
         </p>
-      ) : null}
-      <div className="product-grid">
-        {products.map((product) => (
-          <Link key={product._id} to={`/product/${product._id}`} className="product-link">
-            <ProductCard product={product} />
-          </Link>
-        ))}
-      </div>
+      ) : (
+        <div className="product-grid">
+          {products.map((product) => (
+            <ProductCard
+              key={product._id}
+              product={product}
+              to={`/product/${product._id}`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
