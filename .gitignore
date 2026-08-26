@@ -3,3 +3,4 @@ config/config.env
 *.env
 !config/config.env.example
 frontend/dist
+test-results/

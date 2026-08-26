@@ -7,6 +7,7 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [phone_no, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,7 +17,7 @@ export default function RegisterPage() {
     setBusy(true);
     setError('');
     try {
-      await register(username.trim(), phone_no.trim(), password);
+      await register(username.trim(), phone_no.trim(), password, email.trim());
       navigate('/sell');
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -49,6 +50,16 @@ export default function RegisterPage() {
               onChange={(e) => setPhone(e.target.value)}
               required
               autoComplete="tel"
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="email">Email (optional)</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
           </div>
           <div className="form-field">

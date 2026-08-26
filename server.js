@@ -43,6 +43,8 @@ app.use('/api/violet/favorites', require('./routes/favorites'));
 app.use('/api/violet/cart', require('./routes/cart'));
 app.use('/api/violet/orders', require('./routes/orders'));
 app.use('/api/violet/reviews', require('./routes/reviews'));
+app.use('/api/violet/messages', require('./routes/messages'));
+app.use('/api/violet/notifications', require('./routes/notifications'));
 
 const { s3Configured, ensureBucket } = require('./utils/s3');
 if (s3Configured) {

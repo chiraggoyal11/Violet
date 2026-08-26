@@ -13,10 +13,20 @@ export default function ProductDetailPage() {
   const [average, setAverage] = useState(0);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+  const [messageBody, setMessageBody] = useState('');
+  const [showMessage, setShowMessage] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  const gallery =
+    product?.ImageUrls?.length > 0
+      ? product.ImageUrls
+      : product?.ImageUrl
+        ? [product.ImageUrl]
+        : [];
 
   async function load() {
     setLoading(true);
@@ -27,6 +37,7 @@ export default function ProductDetailPage() {
         api.listReviews(id),
       ]);
       setProduct(detail.product);
+      setActiveImage(0);
       setReviews(rev.reviews || []);
       setAverage(rev.average || 0);
     } catch (err) {
@@ -101,6 +112,30 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function messageSeller(e) {
+    e.preventDefault();
+    if (!token) return navigate('/login');
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api.sendMessage(
+        {
+          recipient_id: product.user_id,
+          product_id: id,
+          body: messageBody.trim(),
+        },
+        token,
+      );
+      setMessageBody('');
+      setShowMessage(false);
+      navigate(`/messages/${data.conversation._id}`);
+    } catch (err) {
+      setError(err.message || 'Could not send message');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className="section">
@@ -129,8 +164,24 @@ export default function ProductDetailPage() {
       </Link>
       <div className="detail-layout">
         <div className="detail-media">
-          {product.ImageUrl ? (
-            <img src={product.ImageUrl} alt={product.Product_Name} />
+          {gallery.length ? (
+            <>
+              <img src={gallery[activeImage]} alt={product.Product_Name} />
+              {gallery.length > 1 ? (
+                <div className="gallery-thumbs">
+                  {gallery.map((url, i) => (
+                    <button
+                      key={url + i}
+                      type="button"
+                      className={i === activeImage ? 'active' : ''}
+                      onClick={() => setActiveImage(i)}
+                    >
+                      <img src={url} alt="" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="product-fallback large">{product.Product_Name}</div>
           )}
@@ -153,6 +204,16 @@ export default function ProductDetailPage() {
                 Add to cart
               </button>
             ) : null}
+            {!isOwner ? (
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => (token ? setShowMessage((v) => !v) : navigate('/login'))}
+              >
+                Message seller
+              </button>
+            ) : null}
             <button className="btn btn-secondary" type="button" disabled={busy} onClick={toggleFavorite}>
               Favorite
             </button>
@@ -160,6 +221,21 @@ export default function ProductDetailPage() {
               Share
             </button>
           </div>
+          {showMessage && !isOwner ? (
+            <form className="form panel message-compose" onSubmit={messageSeller}>
+              <h3>Message the seller</h3>
+              <textarea
+                rows={3}
+                value={messageBody}
+                onChange={(e) => setMessageBody(e.target.value)}
+                placeholder="Ask about shipping, customization, or availability…"
+                required
+              />
+              <button className="btn btn-primary" type="submit" disabled={busy}>
+                {busy ? 'Sending…' : 'Send message'}
+              </button>
+            </form>
+          ) : null}
         </div>
       </div>
 

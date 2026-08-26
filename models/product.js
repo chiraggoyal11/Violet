@@ -23,6 +23,8 @@ const productSchema = new mongoose.Schema(
     },
     Image: { type: String, required: false },
     ImageUrl: { type: String, required: false },
+    Images: { type: [String], default: [] },
+    ImageUrls: { type: [String], default: [] },
     deletedAt: { type: Date, default: null }
   },
   { timestamps: true }

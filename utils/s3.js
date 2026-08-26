@@ -83,23 +83,43 @@ async function ensureBucket() {
     }
 }
 
+async function signImageKey(key) {
+    if (!key || !s3) return null;
+    return getSignedUrl(
+        s3,
+        new GetObjectCommand({
+            Bucket: bucketName,
+            Key: key
+        }),
+        { expiresIn: 3600 }
+    );
+}
+
 async function attachImageUrls(products) {
     if (!s3) return products;
     await ensureBucket();
     for (const prod of products) {
-        if (!prod.Image) continue;
-        try {
-            prod.ImageUrl = await getSignedUrl(
-                s3,
-                new GetObjectCommand({
-                    Bucket: bucketName,
-                    Key: prod.Image
-                }),
-                { expiresIn: 3600 }
-            );
-        } catch (error) {
-            console.log('Signed URL skipped:', error.message);
+        const keys = [];
+        if (Array.isArray(prod.Images) && prod.Images.length) {
+            keys.push(...prod.Images);
+        } else if (prod.Image) {
+            keys.push(prod.Image);
         }
+        if (!keys.length) continue;
+
+        const urls = [];
+        for (const key of keys) {
+            try {
+                urls.push(await signImageKey(key));
+            } catch (error) {
+                console.log('Signed URL skipped:', error.message);
+            }
+        }
+
+        prod.ImageUrls = urls.filter(Boolean);
+        prod.Images = keys;
+        prod.Image = keys[0] || prod.Image;
+        prod.ImageUrl = urls[0] || prod.ImageUrl;
     }
     return products;
 }
@@ -141,10 +161,20 @@ async function deleteProductImage(key) {
     }
 }
 
+async function uploadProductImages(files) {
+    const uploaded = [];
+    for (const file of files || []) {
+        uploaded.push(await uploadProductImage(file));
+    }
+    return uploaded;
+}
+
 module.exports = {
     s3Configured,
     ensureBucket,
     attachImageUrls,
+    signImageKey,
     uploadProductImage,
+    uploadProductImages,
     deleteProductImage
 };

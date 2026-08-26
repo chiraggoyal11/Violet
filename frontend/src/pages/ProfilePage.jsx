@@ -6,12 +6,14 @@ import { useAuth } from '../AuthContext';
 export default function ProfilePage() {
   const { user, token, booting, setUserSession } = useAuth();
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (user?.username) setUsername(user.username);
+    if (user?.email) setEmail(user.email);
   }, [user]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
@@ -23,7 +25,10 @@ export default function ProfilePage() {
     setError('');
     setOk('');
     try {
-      const data = await api.updateProfile({ username: username.trim() }, token);
+      const data = await api.updateProfile(
+        { username: username.trim(), email: email.trim() },
+        token,
+      );
       if (!data.success) throw new Error(data.msg || 'Update failed');
       setUserSession(token, data.user);
       setOk('Profile updated.');
@@ -42,6 +47,16 @@ export default function ProfilePage() {
           Phone {user.phone_no} is used to sign in and cannot be changed here.
         </p>
         <form className="form" onSubmit={onSubmit}>
+          <div className="form-field">
+            <label htmlFor="email">Email (optional)</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </div>
           <div className="form-field">
             <label htmlFor="username">Display name</label>
             <input

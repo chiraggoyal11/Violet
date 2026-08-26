@@ -4,6 +4,8 @@ const FAV_BASE = '/api/violet/favorites';
 const CART_BASE = '/api/violet/cart';
 const ORDER_BASE = '/api/violet/orders';
 const REVIEW_BASE = '/api/violet/reviews';
+const MSG_BASE = '/api/violet/messages';
+const NOTE_BASE = '/api/violet/notifications';
 
 async function request(base, path, { method = 'GET', body, token, formData } = {}) {
   const headers = {};
@@ -62,6 +64,10 @@ export const api = {
     request(AUTH_BASE, '/register', { method: 'POST', body: payload }),
   login: (payload) =>
     request(AUTH_BASE, '/login', { method: 'POST', body: payload }),
+  forgotPassword: (phone_no) =>
+    request(AUTH_BASE, '/forgot-password', { method: 'POST', body: { phone_no } }),
+  resetPassword: (payload) =>
+    request(AUTH_BASE, '/reset-password', { method: 'POST', body: payload }),
   me: (token) => request(AUTH_BASE, '/', { token }),
   updateProfile: (payload, token) =>
     request(AUTH_BASE, '/profile', { method: 'PUT', body: payload, token }),
@@ -76,15 +82,15 @@ export const api = {
   getProduct: (id) => request(PRODUCT_BASE, `/detail/${id}`),
   listMyProducts: (userId) => request(PRODUCT_BASE, `/user/${userId}`),
   sellerStats: (token) => request(PRODUCT_BASE, '/seller/stats', { token }),
-  addProduct: async ({ token, name, detail, price, category, stock, imageFile }) => {
+  addProduct: async ({ token, name, detail, price, category, stock, imageFiles = [] }) => {
     const form = new FormData();
     form.append('Product_Name', name);
     form.append('Product_Detail', detail);
     form.append('Price', price);
     if (category) form.append('category', category);
     if (stock !== undefined) form.append('stock', String(stock));
-    if (imageFile) {
-      const compressed = await compressImage(imageFile);
+    for (const file of imageFiles) {
+      const compressed = await compressImage(file);
       form.append('Product_Image', compressed);
     }
     return request(PRODUCT_BASE, '/', {
@@ -139,4 +145,16 @@ export const api = {
       body: payload,
       token,
     }),
+
+  listConversations: (token) => request(MSG_BASE, '/', { token }),
+  getConversation: (id, token) => request(MSG_BASE, `/${id}/messages`, { token }),
+  sendMessage: (payload, token) =>
+    request(MSG_BASE, '/', { method: 'POST', body: payload, token }),
+
+  listNotifications: (token) => request(NOTE_BASE, '/', { token }),
+  unreadNotificationCount: (token) => request(NOTE_BASE, '/unread-count', { token }),
+  markAllNotificationsRead: (token) =>
+    request(NOTE_BASE, '/read-all', { method: 'PUT', token }),
+  markNotificationRead: (id, token) =>
+    request(NOTE_BASE, `/${id}/read`, { method: 'PUT', token }),
 };
