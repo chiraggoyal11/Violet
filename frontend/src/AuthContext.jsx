@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from './api';
+import { api, wakeApi } from './api';
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = 'violet_auth';
@@ -66,6 +66,8 @@ export function AuthProvider({ children }) {
         persist(nextToken, nextUser);
       },
       async loginWithGoogle(credential) {
+        // Render free tier often 502s while waking; ping health first, then retry POST.
+        await wakeApi();
         const data = await api.loginWithGoogle(credential);
         if (!data.success) throw new Error(data.msg || 'Google sign-in failed');
         persist(data.token, data.user);

@@ -149,4 +149,5 @@ Then open http://localhost:5000
 | Google button missing | Set `GOOGLE_CLIENT_ID`, add the Render URL as a JavaScript origin, then **Clear build cache & deploy** |
 | Google button still missing after env set | Hard-refresh `/login` (Ctrl+Shift+R). Confirm the latest deploy finished. |
 | Blank white page on `accounts.google.com/gsi/transform` after Google | Deploy the COOP fix (`same-origin-allow-popups`). Confirm Authorized JavaScript origins match the site URL exactly. |
+| Google shows "Request failed" after Continue with Google | Render free tier is often still waking (502). Wait ~30s and try again. Redeploy latest code (retries + clearer wake-up message). Confirm Atlas Network Access allows `0.0.0.0/0`. |
 | Health check fails | Ensure `/api/violet/health` returns 200 |
