@@ -1,131 +1,148 @@
-# Deploying Violet to AWS
+# Deploy Violet (Render + MongoDB Atlas + AWS S3)
 
-This guide covers a production deployment using **AWS S3** (product images), **EC2 or ECS** (API + built frontend), and **CloudFront** (CDN + HTTPS).
-
-## Architecture
+This is the simplest production path for Violet:
 
 ```
-Browser ──► CloudFront (HTTPS)
-              ├── /* static assets → S3 origin (frontend/dist) OR EC2
-              └── /api/* → ALB → EC2/ECS (Node on :5000)
-MongoDB Atlas ──► API
-AWS S3 (violetchirag) ──► signed product image URLs from API
+Browser ──► https://violet.onrender.com  (Render: Node + built React)
+                │
+                ├── MongoDB Atlas (database)
+                └── AWS S3 violetchirag (product images)
 ```
 
-## 1. Prerequisites
+Google OAuth is optional — enable it after you have the Render URL.
 
-- MongoDB Atlas cluster (or self-hosted MongoDB)
-- S3 bucket for product images (e.g. `violetchirag` in `ap-south-1`)
-- IAM user with `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on that bucket
-- Domain name (optional but recommended for CloudFront)
+---
 
-## 2. Environment variables
+## Before you start
 
-Copy `config/config.env.example` to `config/config.env` on the server (or use your host's secrets UI):
+You need:
+
+1. **GitHub** repo with this code (merge PRs #7 and #8, or deploy this branch)
+2. **MongoDB Atlas** free cluster
+3. **AWS S3** bucket `violetchirag` (you already have this)
+4. **Render.com** account (free)
+
+---
+
+## Step 1 — MongoDB Atlas (free database)
+
+1. Open [mongodb.com/atlas](https://www.mongodb.com/atlas) and sign in
+2. Create a **free M0** cluster (pick a region near Singapore / Mumbai)
+3. **Database Access** → Add user → set username + password (save them)
+4. **Network Access** → Add IP → **Allow Access from Anywhere** (`0.0.0.0/0`)
+5. **Connect** → **Drivers** → copy the connection string:
+
+```text
+mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/violet?retryWrites=true&w=majority
+```
+
+Replace `USER`, `PASSWORD`, and keep `/violet` as the database name.
+
+---
+
+## Step 2 — Deploy on Render
+
+### Option A — Blueprint (recommended)
+
+1. Open [dashboard.render.com](https://dashboard.render.com)
+2. **New** → **Blueprint**
+3. Connect GitHub → select `chiraggoyal11/Violet`
+4. Branch: `main` (after merge) or `cursor/deploy-render-c505`
+5. Render detects `render.yaml`
+6. Fill env vars when prompted (see table below)
+7. Click **Apply** and wait 5–10 minutes
+
+### Option B — Manual Web Service
+
+1. **New** → **Web Service**
+2. Connect the Violet GitHub repo
+3. Settings:
+   - **Runtime:** Docker
+   - **Dockerfile path:** `./Dockerfile`
+   - **Plan:** Free
+   - **Region:** Singapore (or Oregon)
+   - **Health check path:** `/api/violet/health`
+4. Add the environment variables below
+5. Create Web Service
+
+### Environment variables
+
+| Key | Value |
+|-----|--------|
+| `MONGO` | Atlas connection string from Step 1 |
+| `jwtSecret` | Generate in Render, or paste a long random string |
+| `CORS_ORIGIN` | Leave blank first deploy, then set to your Render URL |
+| `BUCKET_NAME` | `violetchirag` |
+| `BUCKET_REGION` | `ap-south-1` |
+| `ACCESS_KEY` | Your AWS IAM access key |
+| `SECRET_ACCESS_KEY` | Your AWS IAM secret |
+| `GOOGLE_CLIENT_ID` | Optional for now — add later |
+| `NODE_ENV` | `production` |
+| `RESET_DEV_MODE` | `false` |
+
+After the first successful deploy, copy your public URL (e.g. `https://violet-xxxx.onrender.com`) and set:
 
 ```env
-PORT=5000
-MONGO=mongodb+srv://USER:PASS@cluster.mongodb.net/violet
-jwtSecret=<long-random-string>
-CORS_ORIGIN=https://your-domain.com
-
-BUCKET_NAME=violetchirag
-BUCKET_REGION=ap-south-1
-ACCESS_KEY=AKIA...
-SECRET_ACCESS_KEY=...
-
-# Do NOT set S3_ENDPOINT for real AWS
-NODE_ENV=production
+CORS_ORIGIN=https://violet-xxxx.onrender.com
 ```
 
-## 3. Build and run on EC2
+Then **Manual Deploy** → clear build cache / redeploy once.
+
+---
+
+## Step 3 — Verify
+
+1. Open `https://YOUR-APP.onrender.com/api/violet/health`  
+   Expect: `{"success":true,...}`
+2. Open `https://YOUR-APP.onrender.com` — homepage should load
+3. Register with phone + strong password
+4. List a product with an image (S3 upload)
+
+---
+
+## Step 4 — Enable Google login (after deploy)
+
+1. Google Cloud Console → your OAuth Web client
+2. **Authorized JavaScript origins** → add:
+   ```
+   https://YOUR-APP.onrender.com
+   ```
+3. **Authorized redirect URIs** → add the same URL
+4. Save
+5. On Render, set `GOOGLE_CLIENT_ID` to your Client ID
+6. Redeploy (or restart) the service
+
+The frontend loads the Google Client ID from the API, so you do **not** need to rebuild for Google.
+
+---
+
+## Free-tier notes
+
+- Render free services **sleep after ~15 minutes** of idle traffic; the first request can take ~30–60s
+- Atlas free tier is enough for early testing
+- Upgrade Render later if you need always-on
+
+---
+
+## Local production build check
 
 ```bash
-git clone https://github.com/chiraggoyal11/Violet.git
-cd Violet
 npm ci
 npm --prefix frontend ci
 npm run build
-npm start
+NODE_ENV=production npm start
 ```
 
-Use **PM2** or **systemd** to keep the process alive:
+Then open http://localhost:5000
 
-```bash
-npm install -g pm2
-pm2 start server.js --name violet
-pm2 save
-```
+---
 
-Open port **5000** (or put nginx in front on 443).
+## Troubleshooting
 
-## 4. CloudFront setup
-
-### Option A — Single origin (simplest)
-
-1. Point CloudFront origin to your EC2 public DNS / ALB.
-2. Default behavior: forward all paths to Node.
-3. Node already serves `frontend/dist` when built (`npm run build`).
-4. Add ACM certificate in **us-east-1** for your custom domain.
-5. Set alternate domain name (CNAME) on the distribution.
-
-### Option B — Split static + API (recommended at scale)
-
-| Behavior | Path pattern | Origin |
-|----------|--------------|--------|
-| Default | `Default (*)` | S3 bucket with `frontend/dist` |
-| API | `/api/*` | ALB → Node :5000 |
-
-Steps:
-
-1. Upload `frontend/dist` to a **separate** S3 bucket (static site).
-2. Create CloudFront distribution with S3 as default origin.
-3. Add second origin: Application Load Balancer → EC2/ECS.
-4. Add cache behavior: path `/api/*` → ALB origin, **CachingDisabled** managed policy.
-5. Forward headers: `Authorization`, `Content-Type`.
-6. Set `CORS_ORIGIN` to your CloudFront URL or custom domain.
-
-## 5. Product images (existing bucket)
-
-Product uploads use **presigned URLs** from the API. The bucket `violetchirag` stays private; only the API signs temporary GET URLs.
-
-Ensure bucket CORS allows your site origin if you ever switch to direct browser uploads:
-
-```json
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["GET", "PUT"],
-    "AllowedOrigins": ["https://your-domain.com"],
-    "ExposeHeaders": []
-  }
-]
-```
-
-## 6. Docker (alternative)
-
-```bash
-docker compose up -d --build
-```
-
-Set env vars in `docker-compose.yml` or an `.env` file. Expose port 5000 behind a reverse proxy.
-
-## 7. CI / health checks
-
-- GitHub Actions runs API tests + frontend build on every push.
-- After deploy, verify:
-  - `GET /api/violet/products` returns JSON
-  - Register → list product with image → signed URL loads in browser
-
-## 8. Password reset in production
-
-OTP codes are logged to the server console when `RESET_DEV_MODE=true` or `NODE_ENV=development`. In production, integrate SMS (Twilio) or email (SES) in `utils/otp.js` — the API routes are already in place.
-
-## Quick checklist
-
-- [ ] MongoDB reachable from server
-- [ ] S3 bucket + IAM keys in secrets
-- [ ] `npm run build` before `npm start`
-- [ ] CloudFront HTTPS + custom domain
-- [ ] `CORS_ORIGIN` matches public URL
-- [ ] `jwtSecret` is strong and secret
+| Problem | Fix |
+|---------|-----|
+| App crash on boot | Check `MONGO` string; Atlas Network Access must allow `0.0.0.0/0` |
+| Images fail | Confirm AWS keys + bucket `violetchirag` in `ap-south-1` |
+| CORS errors | Set `CORS_ORIGIN` exactly to your Render HTTPS URL |
+| Google button missing | Set `GOOGLE_CLIENT_ID` and add the Render URL as a JavaScript origin |
+| Health check fails | Ensure `/api/violet/health` returns 200 |

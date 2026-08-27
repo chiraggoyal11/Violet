@@ -1,0 +1,26 @@
+# Production-oriented compose (API only).
+# Use real AWS S3 + MongoDB Atlas via env file — do not commit secrets.
+#
+#   cp config/config.env.example .env.production.local
+#   # fill MONGO, jwtSecret, AWS keys, optional GOOGLE_CLIENT_ID
+#   docker compose -f docker-compose.prod.yml --env-file .env.production.local up -d --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      RESET_DEV_MODE: "false"
+      MONGO: ${MONGO}
+      jwtSecret: ${jwtSecret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5000}
+      BUCKET_NAME: ${BUCKET_NAME}
+      BUCKET_REGION: ${BUCKET_REGION}
+      ACCESS_KEY: ${ACCESS_KEY}
+      SECRET_ACCESS_KEY: ${SECRET_ACCESS_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

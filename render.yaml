@@ -1,0 +1,41 @@
+# Violet marketplace — Render Blueprint
+# Docs: https://render.com/docs/blueprint-spec
+# Deploy: Render Dashboard → New → Blueprint → connect this GitHub repo
+
+services:
+  - type: web
+    name: violet
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/violet/health
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+      - key: RESET_DEV_MODE
+        value: "false"
+      # MongoDB Atlas connection string (required) — paste in Render dashboard
+      - key: MONGO
+        sync: false
+      # Auto-generated JWT secret
+      - key: jwtSecret
+        generateValue: true
+      # After first deploy, set to https://violet.onrender.com (or your custom domain)
+      - key: CORS_ORIGIN
+        sync: false
+      # Existing AWS S3 bucket for product images
+      - key: BUCKET_NAME
+        sync: false
+      - key: BUCKET_REGION
+        sync: false
+      - key: ACCESS_KEY
+        sync: false
+      - key: SECRET_ACCESS_KEY
+        sync: false
+      # Google OAuth Web Client ID (optional — enable after deploy)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
