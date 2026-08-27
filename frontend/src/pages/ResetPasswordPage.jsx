@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import PhoneField from '../components/PhoneField';
+import PasswordField from '../components/PasswordField';
+import { validatePassword, validatePhoneNumber } from '../utils/validation';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [countryCode, setCountryCode] = useState(location.state?.country_code || '+91');
   const [phone_no, setPhone] = useState(location.state?.phone_no || '');
   const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
@@ -17,8 +21,18 @@ export default function ResetPasswordPage() {
     setBusy(true);
     setError('');
     setOk('');
+
+    const phoneError = validatePhoneNumber(phone_no);
+    const passwordError = validatePassword(password);
+    if (phoneError || passwordError) {
+      setError(phoneError || passwordError);
+      setBusy(false);
+      return;
+    }
+
     try {
       const data = await api.resetPassword({
+        country_code: countryCode,
         phone_no: phone_no.trim(),
         otp: otp.trim(),
         password,
@@ -38,16 +52,12 @@ export default function ResetPasswordPage() {
         <h1>Enter reset code</h1>
         <p className="lede">Use the 6-digit code sent to your phone.</p>
         <form className="form" onSubmit={onSubmit}>
-          <div className="form-field">
-            <label htmlFor="phone">Phone number</label>
-            <input
-              id="phone"
-              value={phone_no}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              autoComplete="tel"
-            />
-          </div>
+          <PhoneField
+            countryCode={countryCode}
+            phone={phone_no}
+            onCountryCodeChange={setCountryCode}
+            onPhoneChange={setPhone}
+          />
           <div className="form-field">
             <label htmlFor="otp">Reset code</label>
             <input
@@ -59,18 +69,7 @@ export default function ResetPasswordPage() {
               autoComplete="one-time-code"
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="password">New password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              autoComplete="new-password"
-            />
-          </div>
+          <PasswordField id="new-password" label="New password" value={password} onChange={setPassword} />
           {error ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
           <div className="form-actions">

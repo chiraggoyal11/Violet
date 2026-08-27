@@ -70,8 +70,11 @@ export const api = {
     request(AUTH_BASE, '/register', { method: 'POST', body: payload }),
   login: (payload) =>
     request(AUTH_BASE, '/login', { method: 'POST', body: payload }),
-  forgotPassword: (phone_no) =>
-    request(AUTH_BASE, '/forgot-password', { method: 'POST', body: { phone_no } }),
+  forgotPassword: ({ country_code, phone_no }) =>
+    request(AUTH_BASE, '/forgot-password', {
+      method: 'POST',
+      body: { country_code, phone_no },
+    }),
   resetPassword: (payload) =>
     request(AUTH_BASE, '/reset-password', { method: 'POST', body: payload }),
   me: (token) => request(AUTH_BASE, '/', { token }),

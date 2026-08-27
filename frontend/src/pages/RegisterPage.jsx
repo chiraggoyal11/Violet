@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import PhoneField from '../components/PhoneField';
+import PasswordField from '../components/PasswordField';
+import { validatePassword, validatePhoneNumber } from '../utils/validation';
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone_no, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,8 +20,17 @@ export default function RegisterPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
+
+    const phoneError = validatePhoneNumber(phone_no);
+    const passwordError = validatePassword(password);
+    if (phoneError || passwordError) {
+      setError(phoneError || passwordError);
+      setBusy(false);
+      return;
+    }
+
     try {
-      await register(username.trim(), phone_no.trim(), password, email.trim());
+      await register(username.trim(), countryCode, phone_no.trim(), password, email.trim());
       navigate('/sell');
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -42,16 +55,12 @@ export default function RegisterPage() {
               autoComplete="nickname"
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="phone">Phone number</label>
-            <input
-              id="phone"
-              value={phone_no}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              autoComplete="tel"
-            />
-          </div>
+          <PhoneField
+            countryCode={countryCode}
+            phone={phone_no}
+            onCountryCodeChange={setCountryCode}
+            onPhoneChange={setPhone}
+          />
           <div className="form-field">
             <label htmlFor="email">Email (optional)</label>
             <input
@@ -62,18 +71,7 @@ export default function RegisterPage() {
               autoComplete="email"
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              autoComplete="new-password"
-            />
-          </div>
+          <PasswordField value={password} onChange={setPassword} />
           {error ? <p className="status error">{error}</p> : null}
           <div className="form-actions">
             <button className="btn btn-primary" type="submit" disabled={busy}>

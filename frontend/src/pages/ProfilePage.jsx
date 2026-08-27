@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api';
+import { formatPhoneDisplay } from '../utils/validation';
 import { useAuth } from '../AuthContext';
 
 export default function ProfilePage() {
@@ -44,7 +45,7 @@ export default function ProfilePage() {
       <div className="panel">
         <h1>Your profile</h1>
         <p className="lede">
-          Phone {user.phone_no} is used to sign in and cannot be changed here.
+          Phone {formatPhoneDisplay(user)} is used to sign in and cannot be changed here.
         </p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">

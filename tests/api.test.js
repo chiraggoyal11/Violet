@@ -18,8 +18,11 @@ const User = require('../models/user');
 const Product = require('../models/product');
 const Notification = require('../models/notification');
 
-const phone = `555${Date.now().toString().slice(-8)}`;
-const phone2 = `556${Date.now().toString().slice(-8)}`;
+const phone = `${Date.now().toString().slice(-10)}`;
+const phone2 = `${(Date.now() + 1).toString().slice(-10)}`;
+const country_code = '+91';
+const validPassword = 'Secret1!';
+const newPassword = 'Reset123!';
 
 describe('Violet API', () => {
   let token;
@@ -47,19 +50,46 @@ describe('Violet API', () => {
     await mongoose.disconnect();
   });
 
+  it('rejects weak passwords and invalid phone numbers', async () => {
+    const weak = await request(app)
+      .post('/api/violet/auth/register')
+      .send({
+        username: 'WeakPass',
+        country_code,
+        phone_no: '12345',
+        password: 'weak'
+      })
+      .expect(400);
+    assert.match(weak.body.msg, /10 digits|Password/i);
+
+    const shortPhone = await request(app)
+      .post('/api/violet/auth/register')
+      .send({
+        username: 'BadPhone',
+        country_code,
+        phone_no: '123456789',
+        password: validPassword
+      })
+      .expect(400);
+    assert.match(shortPhone.body.msg, /10 digits/i);
+  });
+
   it('registers a user without returning a password hash', async () => {
     const res = await request(app)
       .post('/api/violet/auth/register')
       .send({
         username: 'TestMaker',
+        country_code,
         phone_no: phone,
-        password: 'secret123'
+        password: validPassword
       })
       .expect(200);
 
     assert.equal(res.body.success, true);
     assert.ok(res.body.token);
     assert.equal(res.body.user.password, undefined);
+    assert.equal(res.body.user.country_code, country_code);
+    assert.equal(res.body.user.phone_no, phone);
     token = res.body.token;
   });
 
@@ -141,7 +171,7 @@ describe('Violet API', () => {
   it('resets password with OTP', async () => {
     const forgot = await request(app)
       .post('/api/violet/auth/forgot-password')
-      .send({ phone_no: phone })
+      .send({ country_code, phone_no: phone })
       .expect(200);
 
     assert.ok(forgot.body.devOtp);
@@ -149,15 +179,16 @@ describe('Violet API', () => {
     await request(app)
       .post('/api/violet/auth/reset-password')
       .send({
+        country_code,
         phone_no: phone,
         otp: forgot.body.devOtp,
-        password: 'newsecret123'
+        password: newPassword
       })
       .expect(200);
 
     const login = await request(app)
       .post('/api/violet/auth/login')
-      .send({ phone_no: phone, password: 'newsecret123' })
+      .send({ country_code, phone_no: phone, password: newPassword })
       .expect(200);
 
     token = login.body.token;
@@ -168,15 +199,16 @@ describe('Violet API', () => {
       .post('/api/violet/auth/register')
       .send({
         username: 'Buyer',
+        country_code,
         phone_no: phone2,
-        password: 'secret123'
+        password: validPassword
       })
       .expect(200);
 
     token2 = buyer.body.token;
     user2Id = buyer.body.user._id;
 
-    const seller = await User.findOne({ phone_no: phone });
+    const seller = await User.findOne({ country_code, phone_no: phone });
     const sent = await request(app)
       .post('/api/violet/messages')
       .set('Authorization', `Bearer ${token2}`)

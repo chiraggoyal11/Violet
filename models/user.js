@@ -9,10 +9,15 @@ const userSchema = new mongoose.Schema({
     avatar: {
         type: String
     },
+    country_code: {
+        type: String,
+        required: true,
+        trim: true,
+        default: '+91'
+    },
     phone_no: {
         type: String,
         required: true,
-        unique: true,
         trim: true
     },
     email: {
@@ -27,5 +32,7 @@ const userSchema = new mongoose.Schema({
         required: true
     }
 });
+
+userSchema.index({ country_code: 1, phone_no: 1 }, { unique: true });
 
 module.exports = mongoose.model('User', userSchema);
