@@ -105,9 +105,15 @@ router.post('/google', async (req, res) => {
         });
     } catch (error) {
         console.log(error);
-        return res.status(error.status || 500).json({
+        const mongoDown =
+            error?.name === 'MongoServerSelectionError' ||
+            error?.name === 'MongooseError' ||
+            /buffering timed out|ECONNREFUSED|MongoNetworkError/i.test(error?.message || '');
+        return res.status(mongoDown ? 503 : (error.status || 500)).json({
             success: false,
-            msg: error.message || 'Google sign-in failed'
+            msg: mongoDown
+                ? 'Database is temporarily unavailable — try again in a moment'
+                : (error.message || 'Google sign-in failed')
         });
     }
 });

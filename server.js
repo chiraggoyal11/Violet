@@ -44,7 +44,9 @@ const authLimiter = rateLimit({
   message: { success: false, msg: 'Too many requests, try again later' }
 });
 
-connectDB();
+connectDB().catch((err) => {
+  console.log('MongoDB bootstrap failed:'.red, err.message);
+});
 
 app.get('/api/violet/health', (req, res) => {
   res.status(200).json({

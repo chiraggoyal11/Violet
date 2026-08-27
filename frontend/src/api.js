@@ -7,16 +7,44 @@ const REVIEW_BASE = '/api/violet/reviews';
 const MSG_BASE = '/api/violet/messages';
 const NOTE_BASE = '/api/violet/notifications';
 
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
+const WAKE_RETRY_MS = [0, 2000, 4000, 8000, 12000, 16000, 20000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorMessageFromResponse(res, text, data) {
+  const html = Boolean(text && /<!DOCTYPE html|<html/i.test(text));
+  if (GATEWAY_STATUSES.has(res.status) || html) {
+    return 'Server is waking up — wait about 30 seconds, then try Continue with Google again.';
+  }
+  if (data?.msg && !/<html|@font-face|Roobert/i.test(String(data.msg))) {
+    return data.msg;
+  }
+  if (res.status === 429) return 'Too many requests — try again in a few minutes.';
+  return `Request failed (${res.status})`;
+}
+
 async function request(base, path, { method = 'GET', body, token, formData } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body && !formData) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers,
-    body: formData ? body : body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${base}${path}`, {
+      method,
+      headers,
+      body: formData ? body : body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    const err = new Error(
+      'Cannot reach the server — it may be waking up. Wait ~30 seconds and try again.',
+    );
+    err.status = 0;
+    throw err;
+  }
 
   let data = null;
   const text = await res.text();
@@ -35,13 +63,44 @@ async function request(base, path, { method = 'GET', body, token, formData } = {
   }
 
   if (!res.ok) {
-    const err = new Error(data?.msg || `Request failed (${res.status})`);
+    const err = new Error(errorMessageFromResponse(res, text, data));
     err.status = res.status;
     err.data = data;
+    err.retryable = GATEWAY_STATUSES.has(res.status) || Boolean(text && /<!DOCTYPE html|<html/i.test(text));
     throw err;
   }
 
   return data;
+}
+
+async function requestWithRetry(base, path, options = {}, delays = WAKE_RETRY_MS) {
+  let lastError;
+  for (let i = 0; i < delays.length; i += 1) {
+    if (delays[i]) await sleep(delays[i]);
+    try {
+      return await request(base, path, options);
+    } catch (err) {
+      lastError = err;
+      const retryable =
+        err.retryable || err.status === 0 || GATEWAY_STATUSES.has(err.status);
+      if (!retryable || i === delays.length - 1) throw err;
+    }
+  }
+  throw lastError;
+}
+
+/** Ping health until Render free tier finishes waking (or give up). */
+export async function wakeApi() {
+  for (const delay of WAKE_RETRY_MS) {
+    if (delay) await sleep(delay);
+    try {
+      const res = await fetch('/api/violet/health');
+      if (res.ok) return true;
+    } catch {
+      /* keep trying */
+    }
+  }
+  return false;
 }
 
 /** Compress/resize image in the browser before upload (max edge 1600px, JPEG ~0.82). */
@@ -72,7 +131,10 @@ export const api = {
     request(AUTH_BASE, '/login', { method: 'POST', body: payload }),
   authConfig: () => request(AUTH_BASE, '/config'),
   loginWithGoogle: (credential) =>
-    request(AUTH_BASE, '/google', { method: 'POST', body: { credential } }),
+    requestWithRetry(AUTH_BASE, '/google', {
+      method: 'POST',
+      body: { credential },
+    }),
   forgotPassword: ({ country_code, phone_no }) =>
     request(AUTH_BASE, '/forgot-password', {
       method: 'POST',
