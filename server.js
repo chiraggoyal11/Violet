@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
+const { isMongoReady } = require('./utils/mongo');
 
 dotenv.config({
   path: './config/config.env'
@@ -49,9 +50,11 @@ connectDB().catch((err) => {
 });
 
 app.get('/api/violet/health', (req, res) => {
+  const mongo = isMongoReady();
   res.status(200).json({
     success: true,
-    version: 2,
+    version: 3,
+    mongo,
     features: ['multi-image', 'messages', 'notifications', 'password-reset', 'google-oauth']
   });
 });

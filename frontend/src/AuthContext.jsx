@@ -74,12 +74,14 @@ export function AuthProvider({ children }) {
         return data;
       },
       async login(country_code, phone_no, password) {
+        await wakeApi();
         const data = await api.login({ country_code, phone_no, password });
         if (!data.success) throw new Error(data.msg || 'Login failed');
         persist(data.token, data.user);
         return data;
       },
       async register(username, country_code, phone_no, password, email = '') {
+        await wakeApi();
         const payload = { username, country_code, phone_no, password };
         if (email) payload.email = email;
         const data = await api.register(payload);

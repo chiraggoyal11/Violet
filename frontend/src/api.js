@@ -17,7 +17,10 @@ function sleep(ms) {
 function errorMessageFromResponse(res, text, data) {
   const html = Boolean(text && /<!DOCTYPE html|<html/i.test(text));
   if (GATEWAY_STATUSES.has(res.status) || html) {
-    return 'Server is waking up — wait about 30 seconds, then try Continue with Google again.';
+    return 'Server is waking up — wait about 30 seconds, then try again.';
+  }
+  if (res.status === 503 && data?.msg) {
+    return data.msg;
   }
   if (data?.msg && !/<html|@font-face|Roobert/i.test(String(data.msg))) {
     return data.msg;
@@ -66,7 +69,10 @@ async function request(base, path, { method = 'GET', body, token, formData } = {
     const err = new Error(errorMessageFromResponse(res, text, data));
     err.status = res.status;
     err.data = data;
-    err.retryable = GATEWAY_STATUSES.has(res.status) || Boolean(text && /<!DOCTYPE html|<html/i.test(text));
+    err.retryable =
+      GATEWAY_STATUSES.has(res.status) ||
+      res.status === 503 ||
+      Boolean(text && /<!DOCTYPE html|<html/i.test(text));
     throw err;
   }
 
@@ -126,9 +132,9 @@ export async function compressImage(file, { maxEdge = 1600, quality = 0.82 } = {
 
 export const api = {
   register: (payload) =>
-    request(AUTH_BASE, '/register', { method: 'POST', body: payload }),
+    requestWithRetry(AUTH_BASE, '/register', { method: 'POST', body: payload }),
   login: (payload) =>
-    request(AUTH_BASE, '/login', { method: 'POST', body: payload }),
+    requestWithRetry(AUTH_BASE, '/login', { method: 'POST', body: payload }),
   authConfig: () => request(AUTH_BASE, '/config'),
   loginWithGoogle: (credential) =>
     requestWithRetry(AUTH_BASE, '/google', {

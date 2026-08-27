@@ -19,10 +19,12 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
+    setStatus('Signing in — waiting for server…');
 
     const phoneError = validatePhoneNumber(phone_no);
     if (phoneError) {
       setError(phoneError);
+      setStatus('');
       setBusy(false);
       return;
     }
@@ -31,6 +33,7 @@ export default function LoginPage() {
       await login(countryCode, phone_no.trim(), password);
       navigate('/catalog');
     } catch (err) {
+      setStatus('');
       setError(err.message || 'Login failed');
     } finally {
       setBusy(false);
