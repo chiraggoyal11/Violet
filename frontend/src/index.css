@@ -687,6 +687,8 @@ img {
 }
 
 .form-actions {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 0.7rem;

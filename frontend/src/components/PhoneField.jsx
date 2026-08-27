@@ -14,7 +14,10 @@ export default function PhoneField({
         <select
           className="country-code-select"
           value={countryCode}
-          onChange={(e) => onCountryCodeChange(e.target.value)}
+          onChange={(e) => {
+            onCountryCodeChange(e.target.value);
+            e.target.blur();
+          }}
           aria-label="Country code"
         >
           {COUNTRY_CODES.map((item) => (
