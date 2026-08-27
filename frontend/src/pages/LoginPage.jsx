@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [phone_no, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e) {
@@ -40,10 +41,12 @@ export default function LoginPage() {
     if (!response?.credential) return;
     setBusy(true);
     setError('');
+    setStatus('Signing in with Google — waiting for server…');
     try {
       await loginWithGoogle(response.credential);
       navigate('/catalog');
     } catch (err) {
+      setStatus('');
       setError(err.message || 'Google sign-in failed');
     } finally {
       setBusy(false);
@@ -78,6 +81,7 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
           </div>
+          {status ? <p className="status">{status}</p> : null}
           {error ? <p className="status error">{error}</p> : null}
           <div className="form-actions">
             <button className="btn btn-primary" type="submit" disabled={busy}>
