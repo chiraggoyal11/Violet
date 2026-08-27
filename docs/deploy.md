@@ -36,7 +36,7 @@ You need:
 mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/violet?retryWrites=true&w=majority
 ```
 
-Replace `USER`, `PASSWORD`, and keep `/violet` as the database name.
+Replace `USER`, `PASSWORD`, and keep `/violet` as the database name (required — do not use only `/?appName=...`).
 
 ---
 

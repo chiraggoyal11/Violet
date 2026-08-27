@@ -95,9 +95,7 @@ router.post('/google', async (req, res) => {
             });
         } else {
             if (profile.avatar) user.avatar = profile.avatar;
-            if (profile.username && user.username !== profile.username) {
-                user.username = profile.username;
-            }
+            // Do not overwrite an existing display name on every Google sign-in.
             await user.save();
         }
 

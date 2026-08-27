@@ -95,7 +95,17 @@ router.put('/items/:productId', user_jwt, async (req, res) => {
       if (!item) {
         return res.status(404).json({ success: false, msg: 'Item not in cart' });
       }
-      item.quantity = quantity;
+      const product = await Product.findById(req.params.productId);
+      if (!product || product.status !== 'active' || product.stock < 1) {
+        cart.items = cart.items.filter((i) => String(i.product_id) !== String(req.params.productId));
+        await cart.save();
+        return res.status(400).json({
+          success: false,
+          msg: 'Product is not available',
+          ...(await hydrateCart(cart))
+        });
+      }
+      item.quantity = Math.min(product.stock, quantity);
     }
     await cart.save();
     const hydrated = await hydrateCart(cart);
