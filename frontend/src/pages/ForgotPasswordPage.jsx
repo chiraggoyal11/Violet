@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import PhoneField from '../components/PhoneField';
+import { validatePhoneNumber } from '../utils/validation';
 
 export default function ForgotPasswordPage() {
+  const [countryCode, setCountryCode] = useState('+91');
   const [phone_no, setPhone] = useState('');
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
@@ -15,8 +18,19 @@ export default function ForgotPasswordPage() {
     setError('');
     setOk('');
     setDevOtp('');
+
+    const phoneError = validatePhoneNumber(phone_no);
+    if (phoneError) {
+      setError(phoneError);
+      setBusy(false);
+      return;
+    }
+
     try {
-      const data = await api.forgotPassword(phone_no.trim());
+      const data = await api.forgotPassword({
+        country_code: countryCode,
+        phone_no: phone_no.trim(),
+      });
       setOk(data.msg || 'Reset code sent.');
       if (data.devOtp) setDevOtp(data.devOtp);
     } catch (err) {
@@ -32,16 +46,12 @@ export default function ForgotPasswordPage() {
         <h1>Reset password</h1>
         <p className="lede">Enter your phone number. We will send a 6-digit reset code.</p>
         <form className="form" onSubmit={onSubmit}>
-          <div className="form-field">
-            <label htmlFor="phone">Phone number</label>
-            <input
-              id="phone"
-              value={phone_no}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              autoComplete="tel"
-            />
-          </div>
+          <PhoneField
+            countryCode={countryCode}
+            phone={phone_no}
+            onCountryCodeChange={setCountryCode}
+            onPhoneChange={setPhone}
+          />
           {error ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
           {devOtp ? (
@@ -56,7 +66,7 @@ export default function ForgotPasswordPage() {
             <Link
               className="btn btn-secondary"
               to="/reset-password"
-              state={{ phone_no: phone_no.trim() }}
+              state={{ country_code: countryCode, phone_no: phone_no.trim() }}
             >
               Enter code
             </Link>

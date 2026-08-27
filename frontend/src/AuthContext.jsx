@@ -65,14 +65,14 @@ export function AuthProvider({ children }) {
       setUserSession(nextToken, nextUser) {
         persist(nextToken, nextUser);
       },
-      async login(phone_no, password) {
-        const data = await api.login({ phone_no, password });
+      async login(country_code, phone_no, password) {
+        const data = await api.login({ country_code, phone_no, password });
         if (!data.success) throw new Error(data.msg || 'Login failed');
         persist(data.token, data.user);
         return data;
       },
-      async register(username, phone_no, password, email = '') {
-        const payload = { username, phone_no, password };
+      async register(username, country_code, phone_no, password, email = '') {
+        const payload = { username, country_code, phone_no, password };
         if (email) payload.email = email;
         const data = await api.register(payload);
         if (!data.success) throw new Error(data.msg || 'Registration failed');

@@ -6,6 +6,31 @@ const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
 const { createPasswordOtp, verifyPasswordOtp, devOtpEnabled } = require('../utils/otp');
 
+const {
+    validatePassword,
+    parsePhoneFields,
+    phoneLookupKey
+} = require('../utils/authValidation');
+
+async function findUserByPhone(country_code, phone_no) {
+    const parsed = parsePhoneFields({ country_code, phone_no });
+    if (parsed.valid) {
+        const byParts = await User.findOne({
+            country_code: parsed.country_code,
+            phone_no: parsed.phone_no
+        });
+        if (byParts) return byParts;
+    }
+
+    const raw = String(phone_no || '').trim();
+    if (raw) {
+        const legacy = await User.findOne({ phone_no: raw });
+        if (legacy) return legacy;
+    }
+
+    return null;
+}
+
 function publicUser(user) {
     if (!user) return null;
     const obj = user.toObject ? user.toObject() : { ...user };
@@ -75,28 +100,35 @@ router.put('/profile', user_jwt, async (req, res) => {
 
 router.post('/register', async (req, res) => {
     const username = (req.body.username || '').trim();
-    const phone_no = (req.body.phone_no || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
     const password = req.body.password || '';
 
     try {
-        if (!username || !phone_no || !password) {
+        if (!username || !password) {
             return res.status(400).json({
                 success: false,
                 msg: 'Username, phone number, and password are required'
             });
         }
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Password must be at least 6 characters'
-            });
+
+        const phone = parsePhoneFields(req.body);
+        if (!phone.valid) {
+            return res.status(400).json({ success: false, msg: phone.msg });
         }
+
+        const passwordCheck = validatePassword(password);
+        if (!passwordCheck.valid) {
+            return res.status(400).json({ success: false, msg: passwordCheck.msg });
+        }
+
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             return res.status(400).json({ success: false, msg: 'Invalid email address' });
         }
 
-        const user_exist = await User.findOne({ phone_no });
+        const user_exist = await User.findOne({
+            country_code: phone.country_code,
+            phone_no: phone.phone_no
+        });
         if (user_exist) {
             return res.status(409).json({
                 success: false,
@@ -106,7 +138,8 @@ router.post('/register', async (req, res) => {
 
         const user = new User({
             username,
-            phone_no,
+            country_code: phone.country_code,
+            phone_no: phone.phone_no,
             ...(email ? { email } : {}),
             password: await bcryptjs.hash(password, await bcryptjs.genSalt(10)),
             avatar: 'https://gravatar.com/avatar/?s=200&d=retro'
@@ -133,18 +166,21 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-    const phone_no = (req.body.phone_no || '').trim();
     const password = req.body.password || '';
 
     try {
-        if (!phone_no || !password) {
+        const phone = parsePhoneFields(req.body);
+        if (!phone.valid) {
+            return res.status(400).json({ success: false, msg: phone.msg });
+        }
+        if (!password) {
             return res.status(400).json({
                 success: false,
                 msg: 'Phone number and password are required'
             });
         }
 
-        const user = await User.findOne({ phone_no });
+        const user = await findUserByPhone(phone.country_code, phone.phone_no);
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -173,23 +209,22 @@ router.post('/login', async (req, res) => {
 });
 
 router.post('/forgot-password', async (req, res) => {
-    const phone_no = (req.body.phone_no || '').trim();
-
     try {
-        if (!phone_no) {
-            return res.status(400).json({ success: false, msg: 'Phone number is required' });
+        const phone = parsePhoneFields(req.body);
+        if (!phone.valid) {
+            return res.status(400).json({ success: false, msg: phone.msg });
         }
 
-        const user = await User.findOne({ phone_no });
+        const user = await findUserByPhone(phone.country_code, phone.phone_no);
+        const otpKey = phoneLookupKey(phone.country_code, phone.phone_no);
         if (!user) {
-            // Avoid account enumeration
             return res.status(200).json({
                 success: true,
                 msg: 'If that phone number exists, a reset code was sent.'
             });
         }
 
-        const otp = await createPasswordOtp(phone_no);
+        const otp = await createPasswordOtp(otpKey);
         const payload = {
             success: true,
             msg: 'If that phone number exists, a reset code was sent.'
@@ -205,30 +240,33 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 router.post('/reset-password', async (req, res) => {
-    const phone_no = (req.body.phone_no || '').trim();
     const otp = String(req.body.otp || '').trim();
     const password = req.body.password || '';
 
     try {
-        if (!phone_no || !otp || !password) {
+        const phone = parsePhoneFields(req.body);
+        if (!phone.valid) {
+            return res.status(400).json({ success: false, msg: phone.msg });
+        }
+        if (!otp || !password) {
             return res.status(400).json({
                 success: false,
                 msg: 'Phone number, reset code, and new password are required'
             });
         }
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                msg: 'Password must be at least 6 characters'
-            });
+
+        const passwordCheck = validatePassword(password);
+        if (!passwordCheck.valid) {
+            return res.status(400).json({ success: false, msg: passwordCheck.msg });
         }
 
-        const user = await User.findOne({ phone_no });
+        const user = await findUserByPhone(phone.country_code, phone.phone_no);
         if (!user) {
             return res.status(400).json({ success: false, msg: 'Invalid reset request' });
         }
 
-        const valid = await verifyPasswordOtp(phone_no, otp);
+        const otpKey = phoneLookupKey(phone.country_code, phone.phone_no);
+        const valid = await verifyPasswordOtp(otpKey, otp);
         if (!valid) {
             return res.status(400).json({ success: false, msg: 'Invalid or expired reset code' });
         }
