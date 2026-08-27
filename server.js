@@ -17,7 +17,11 @@ const app = express();
 
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' }
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Allow Google Identity Services popup to postMessage the ID token back.
+  // Default "same-origin" severs window.opener and leaves a blank
+  // accounts.google.com/gsi/transform page after sign-in.
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }
 }));
 app.use(morgan('dev'));
 

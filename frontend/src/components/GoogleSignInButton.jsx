@@ -19,6 +19,9 @@ export default function GoogleSignInButton({ onSuccess, onError, mode = 'signin'
           theme="outline"
           size="large"
           width="320"
+          ux_mode="popup"
+          use_fedcm_for_button
+          use_fedcm_for_prompt
         />
       </div>
     </div>

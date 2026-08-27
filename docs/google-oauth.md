@@ -7,8 +7,9 @@ Violet supports **Continue with Google** on the login and register pages.
 1. Open [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
 2. Create an **OAuth 2.0 Client ID** (Web application)
 3. Add **Authorized JavaScript origins**:
-   - `http://localhost:5173` (local dev)
-   - Your production URL (e.g. `https://your-domain.com`)
+   - `http://localhost:5173` (Vite local)
+   - `http://localhost:5000` (production build locally)
+   - Your production URL (e.g. `https://violet-hrwi.onrender.com`) — no trailing slash
 4. Copy the **Client ID** (ends with `.apps.googleusercontent.com`)
 
 No client secret is required for the ID-token flow used by Violet.
@@ -40,7 +41,16 @@ The Dockerfile bakes that value into the SPA automatically — no separate front
 
 Restart both servers after changing local env files.
 
-## 4. How it works
+## 4. Production notes (Render)
+
+The API sets `Cross-Origin-Opener-Policy: same-origin-allow-popups` so the Google
+popup can return the ID token. A stricter `same-origin` COOP leaves a blank
+`accounts.google.com/gsi/transform` page after choosing a Google account.
+
+Authorized JavaScript origins must include your exact Render URL
+(e.g. `https://violet-hrwi.onrender.com`) — no trailing slash.
+
+## 5. How it works
 
 - User clicks **Continue with Google** on login or register
 - Google returns an ID token to the browser

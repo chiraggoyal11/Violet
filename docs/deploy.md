@@ -148,4 +148,5 @@ Then open http://localhost:5000
 | CORS errors | Set `CORS_ORIGIN` exactly to your Render HTTPS URL |
 | Google button missing | Set `GOOGLE_CLIENT_ID`, add the Render URL as a JavaScript origin, then **Clear build cache & deploy** |
 | Google button still missing after env set | Hard-refresh `/login` (Ctrl+Shift+R). Confirm the latest deploy finished. |
+| Blank white page on `accounts.google.com/gsi/transform` after Google | Deploy the COOP fix (`same-origin-allow-popups`). Confirm Authorized JavaScript origins match the site URL exactly. |
 | Health check fails | Ensure `/api/violet/health` returns 200 |
