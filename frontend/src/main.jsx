@@ -6,6 +6,8 @@ import { api } from './api';
 import { GoogleAuthReadyContext } from './googleAuthReady';
 import './index.css';
 
+const CONFIG_RETRY_MS = [0, 1500, 3000, 6000, 12000];
+
 function Root() {
   const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
   const [googleClientId, setGoogleClientId] = useState(envClientId);
@@ -13,16 +15,26 @@ function Root() {
   useEffect(() => {
     if (envClientId) return;
     let cancelled = false;
-    api
-      .authConfig()
-      .then((data) => {
-        if (!cancelled && data?.googleClientId) {
-          setGoogleClientId(data.googleClientId);
+
+    (async () => {
+      for (const delay of CONFIG_RETRY_MS) {
+        if (cancelled) return;
+        if (delay) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
-      })
-      .catch(() => {
-        /* Google button stays hidden if config unavailable */
-      });
+        if (cancelled) return;
+        try {
+          const data = await api.authConfig();
+          if (!cancelled && data?.googleClientId) {
+            setGoogleClientId(data.googleClientId);
+            return;
+          }
+        } catch {
+          /* Retry — Render free tier often 502s while waking */
+        }
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
