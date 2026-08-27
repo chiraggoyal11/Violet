@@ -18,6 +18,10 @@ services:
         value: "5000"
       - key: RESET_DEV_MODE
         value: "false"
+      # When no Twilio/SMTP is configured, forgot-password returns resetCode in JSON
+      # so the UI can show the code. Set to "false" after you add real SMS/email.
+      - key: RESET_RETURN_OTP
+        value: "true"
       # MongoDB Atlas connection string (required) — paste in Render dashboard
       - key: MONGO
         sync: false

@@ -151,4 +151,5 @@ Then open http://localhost:5000
 | Blank white page on `accounts.google.com/gsi/transform` after Google | Deploy the COOP fix (`same-origin-allow-popups`). Confirm Authorized JavaScript origins match the site URL exactly. |
 | Google shows "Request failed" after Continue with Google | Render free tier is often still waking (502). Wait ~30s and try again. Redeploy latest code (retries + clearer wake-up message). Confirm Atlas Network Access allows `0.0.0.0/0`. |
 | Sign in / register stuck or "Registration failed" / products fail | Database is down. Check `/api/violet/health` — if `"mongo":false`, fix Atlas Network Access (`0.0.0.0/0`), verify Render `MONGO` URI, restart the service. |
+| Forgot password never shows a code | Without SMS/Twilio the API returns `resetCode` in the response (set `RESET_RETURN_OTP=true`). Open Forgot password, copy the on-screen code, then Enter code. |
 | Health check fails | Ensure `/api/violet/health` returns 200 |

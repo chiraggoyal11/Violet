@@ -3,8 +3,10 @@ const router = express.Router();
 const Review = require('../models/review');
 const Product = require('../models/product');
 const User = require('../models/user');
+const Order = require('../models/order');
 const user_jwt = require('../middleware/user_jwt');
 const { notifyUser } = require('../utils/notifications');
+const { mongoFailure } = require('../utils/mongo');
 
 router.get('/product/:productId', async (req, res) => {
   try {
@@ -43,6 +45,18 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
       return res.status(400).json({ success: false, msg: 'You cannot review your own product' });
     }
 
+    const purchased = await Order.findOne({
+      buyer_id: String(req.user.id),
+      status: 'placed',
+      'items.product_id': String(req.params.productId)
+    }).select('_id');
+    if (!purchased) {
+      return res.status(403).json({
+        success: false,
+        msg: 'Buy this product before leaving a review'
+      });
+    }
+
     const user = await User.findById(req.user.id).select('username');
     const review = await Review.findOneAndUpdate(
       { product_id: req.params.productId, user_id: req.user.id },
@@ -67,7 +81,7 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
     return res.status(200).json({ success: true, msg: 'Review saved', review });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ success: false, msg: 'Failed to save review' });
+    return mongoFailure(res, error, 'Failed to save review');
   }
 });
 

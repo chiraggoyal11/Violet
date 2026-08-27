@@ -16,6 +16,15 @@ function devOtpEnabled() {
   );
 }
 
+/** Return the OTP in the API response when no SMS/email provider is configured. */
+function shouldReturnOtpInResponse() {
+  if (process.env.RESET_RETURN_OTP === 'false') return false;
+  if (devOtpEnabled()) return true;
+  if (process.env.RESET_RETURN_OTP === 'true') return true;
+  // Default for free-tier deploys without Twilio/SMTP: show code once in the UI.
+  return !process.env.TWILIO_ACCOUNT_SID && !process.env.SMTP_HOST;
+}
+
 async function createPasswordOtp(phone_no) {
   const otp = generateOtp();
   const otpHash = await bcryptjs.hash(otp, 8);
@@ -24,7 +33,7 @@ async function createPasswordOtp(phone_no) {
   await PasswordReset.deleteMany({ phone_no });
   await PasswordReset.create({ phone_no, otpHash, expiresAt });
 
-  if (devOtpEnabled()) {
+  if (devOtpEnabled() || shouldReturnOtpInResponse()) {
     console.log(`[Violet] Password reset OTP for ${phone_no}: ${otp}`);
   }
 
@@ -46,5 +55,6 @@ async function verifyPasswordOtp(phone_no, otp) {
 module.exports = {
   createPasswordOtp,
   verifyPasswordOtp,
-  devOtpEnabled
+  devOtpEnabled,
+  shouldReturnOtpInResponse
 };

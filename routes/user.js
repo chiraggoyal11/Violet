@@ -4,7 +4,7 @@ const User = require('../models/user');
 const bcryptjs = require('bcryptjs');
 const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
-const { createPasswordOtp, verifyPasswordOtp, devOtpEnabled } = require('../utils/otp');
+const { createPasswordOtp, verifyPasswordOtp, shouldReturnOtpInResponse } = require('../utils/otp');
 const { googleConfigured, verifyGoogleCredential } = require('../utils/googleAuth');
 const { requireMongo, mongoFailure } = require('../utils/mongo');
 
@@ -290,17 +290,18 @@ router.post('/forgot-password', async (req, res) => {
         if (!user) {
             return res.status(200).json({
                 success: true,
-                msg: 'If that phone number exists, a reset code was sent.'
+                msg: 'If that phone number is registered, a reset code is available for 15 minutes.'
             });
         }
 
         const otp = await createPasswordOtp(otpKey);
         const payload = {
             success: true,
-            msg: 'If that phone number exists, a reset code was sent.'
+            msg: 'If that phone number is registered, a reset code is available for 15 minutes.'
         };
-        if (devOtpEnabled()) {
-            payload.devOtp = otp;
+        if (shouldReturnOtpInResponse()) {
+            payload.resetCode = otp;
+            payload.devOtp = otp; // backward compatible with older frontend
         }
         return res.status(200).json(payload);
     } catch (error) {

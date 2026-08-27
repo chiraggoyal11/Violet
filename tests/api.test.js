@@ -271,6 +271,13 @@ describe('Violet API', () => {
 
     assert.equal(updated.body.items[0].quantity, 2);
 
+    const blockedReview = await request(app)
+      .post(`/api/violet/reviews/product/${cartProductId}`)
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ rating: 5, comment: 'too soon' })
+      .expect(403);
+    assert.match(blockedReview.body.msg, /Buy this product/i);
+
     const checkout = await request(app)
       .post('/api/violet/orders/checkout')
       .set('Authorization', `Bearer ${token2}`)
@@ -278,6 +285,13 @@ describe('Violet API', () => {
       .expect(200);
 
     assert.ok(checkout.body.order._id);
+
+    const review = await request(app)
+      .post(`/api/violet/reviews/product/${cartProductId}`)
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ rating: 5, comment: 'after purchase' })
+      .expect(200);
+    assert.equal(review.body.success, true);
 
     const orders = await request(app)
       .get('/api/violet/orders')
