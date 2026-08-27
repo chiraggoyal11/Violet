@@ -1,24 +1,26 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../AuthContext';
+import { Link } from 'react-router-dom';
+import { api } from '../api';
 
-export default function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
+export default function ForgotPasswordPage() {
   const [phone_no, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [ok, setOk] = useState('');
+  const [devOtp, setDevOtp] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setBusy(true);
     setError('');
+    setOk('');
+    setDevOtp('');
     try {
-      await login(phone_no.trim(), password);
-      navigate('/catalog');
+      const data = await api.forgotPassword(phone_no.trim());
+      setOk(data.msg || 'Reset code sent.');
+      if (data.devOtp) setDevOtp(data.devOtp);
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Could not send reset code');
     } finally {
       setBusy(false);
     }
@@ -27,8 +29,8 @@ export default function LoginPage() {
   return (
     <div className="auth-layout">
       <div className="panel">
-        <h1>Welcome back</h1>
-        <p className="lede">Sign in with the phone number on your Violet account.</p>
+        <h1>Reset password</h1>
+        <p className="lede">Enter your phone number. We will send a 6-digit reset code.</p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">
             <label htmlFor="phone">Phone number</label>
@@ -40,28 +42,28 @@ export default function LoginPage() {
               autoComplete="tel"
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
           {error ? <p className="status error">{error}</p> : null}
+          {ok ? <p className="status ok">{ok}</p> : null}
+          {devOtp ? (
+            <p className="status ok">
+              Dev mode code: <strong>{devOtp}</strong> — use it on the reset page.
+            </p>
+          ) : null}
           <div className="form-actions">
             <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Signing in…' : 'Sign in'}
+              {busy ? 'Sending…' : 'Send reset code'}
             </button>
+            <Link
+              className="btn btn-secondary"
+              to="/reset-password"
+              state={{ phone_no: phone_no.trim() }}
+            >
+              Enter code
+            </Link>
           </div>
         </form>
         <p className="muted-link" style={{ marginTop: '1rem' }}>
-          New here? <Link to="/register">Create an account</Link>
-          {' · '}
-          <Link to="/forgot-password">Forgot password?</Link>
+          <Link to="/login">Back to sign in</Link>
         </p>
       </div>
     </div>

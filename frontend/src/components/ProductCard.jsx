@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 function formatPrice(price) {
   const n = Number(price);
   if (Number.isFinite(n)) {
@@ -11,11 +13,12 @@ function formatPrice(price) {
 
 export { formatPrice };
 
-export default function ProductCard({ product }) {
-  const image = product.ImageUrl || null;
+export default function ProductCard({ product, to }) {
+  const image =
+    product.ImageUrls?.[0] || product.ImageUrl || null;
   const sold = product.status === 'sold' || Number(product.stock) === 0;
 
-  return (
+  const card = (
     <article className={`product-tile ${sold ? 'is-sold' : ''}`}>
       <div className="product-media">
         {image ? (
@@ -35,6 +38,16 @@ export default function ProductCard({ product }) {
       </div>
     </article>
   );
+
+  if (to) {
+    return (
+      <Link to={to} className="product-link" aria-label={`View ${product.Product_Name}`}>
+        {card}
+      </Link>
+    );
+  }
+
+  return card;
 }
 
 export function SkeletonGrid({ count = 8 }) {

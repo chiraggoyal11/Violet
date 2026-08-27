@@ -6,7 +6,7 @@ const { isValidPrice } = require('../middleware/validate');
 const multer = require('multer');
 const {
   attachImageUrls,
-  uploadProductImage
+  uploadProductImages
 } = require('../utils/s3');
 
 const upload = multer({
@@ -175,7 +175,7 @@ router.get('/seller/stats', user_jwt, async (req, res) => {
   }
 });
 
-router.post('/', user_jwt, upload.single('Product_Image'), async (req, res) => {
+router.post('/', user_jwt, upload.array('Product_Image', 8), async (req, res) => {
   try {
     const Name = (req.body.Product_Name || '').trim();
     const Detail = (req.body.Product_Detail || '').trim();
@@ -206,9 +206,11 @@ router.post('/', user_jwt, upload.single('Product_Image'), async (req, res) => {
       status: stock === 0 ? 'sold' : 'active'
     });
 
-    if (req.file) {
+    if (req.files?.length) {
       try {
-        prod.Image = await uploadProductImage(req.file);
+        const keys = await uploadProductImages(req.files);
+        prod.Images = keys;
+        prod.Image = keys[0];
       } catch (error) {
         return res.status(error.status || 500).json({
           success: false,

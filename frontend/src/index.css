@@ -298,6 +298,13 @@ img {
   color: inherit;
   text-decoration: none;
   display: block;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+.product-link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
 }
 
 .product-fallback {
@@ -726,4 +733,103 @@ img {
   .panel {
     padding: 1.25rem;
   }
+
+  .messages-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gallery-thumbs {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gallery-thumbs button {
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  width: 64px;
+  height: 64px;
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.gallery-thumbs button.active {
+  border-color: var(--accent);
+}
+
+.gallery-thumbs img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.messages-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.conversation-list,
+.message-list,
+.notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.conversation-item {
+  display: block;
+  padding: 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  margin-bottom: 0.5rem;
+}
+
+.conversation-item.active {
+  border-color: var(--accent);
+  background: rgba(47, 93, 74, 0.08);
+}
+
+.message-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.message-list li {
+  max-width: 80%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.message-list li.mine {
+  justify-self: end;
+  background: rgba(47, 93, 74, 0.12);
+}
+
+.message-compose textarea {
+  width: 100%;
+  margin-bottom: 0.65rem;
+}
+
+.notification-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-list li.unread strong {
+  color: var(--brand);
 }

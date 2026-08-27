@@ -3,7 +3,9 @@ const router = express.Router();
 const Cart = require('../models/cart');
 const Order = require('../models/order');
 const Product = require('../models/product');
+const User = require('../models/user');
 const user_jwt = require('../middleware/user_jwt');
+const { notifyUser } = require('../utils/notifications');
 
 router.get('/', user_jwt, async (req, res) => {
   try {
@@ -85,6 +87,20 @@ router.post('/checkout', user_jwt, async (req, res) => {
 
     cart.items = [];
     await cart.save();
+
+    const sellerIds = [...new Set(orderItems.map((i) => String(i.seller_id)))];
+    const buyer = await User.findById(req.user.id).select('username');
+    await Promise.all(
+      sellerIds.map((sellerId) =>
+        notifyUser({
+          user_id: sellerId,
+          type: 'order',
+          title: 'New order received',
+          body: `${buyer?.username || 'A buyer'} ordered ${orderItems.filter((i) => String(i.seller_id) === sellerId).map((i) => i.Product_Name).join(', ')}`,
+          link: '/seller'
+        })
+      )
+    );
 
     return res.status(200).json({
       success: true,

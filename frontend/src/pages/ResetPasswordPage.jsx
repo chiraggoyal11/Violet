@@ -1,24 +1,32 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../AuthContext';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { api } from '../api';
 
-export default function LoginPage() {
-  const { login } = useAuth();
+export default function ResetPasswordPage() {
   const navigate = useNavigate();
-  const [phone_no, setPhone] = useState('');
+  const location = useLocation();
+  const [phone_no, setPhone] = useState(location.state?.phone_no || '');
+  const [otp, setOtp] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
     setBusy(true);
     setError('');
+    setOk('');
     try {
-      await login(phone_no.trim(), password);
-      navigate('/catalog');
+      const data = await api.resetPassword({
+        phone_no: phone_no.trim(),
+        otp: otp.trim(),
+        password,
+      });
+      setOk(data.msg || 'Password updated.');
+      setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Could not reset password');
     } finally {
       setBusy(false);
     }
@@ -27,8 +35,8 @@ export default function LoginPage() {
   return (
     <div className="auth-layout">
       <div className="panel">
-        <h1>Welcome back</h1>
-        <p className="lede">Sign in with the phone number on your Violet account.</p>
+        <h1>Enter reset code</h1>
+        <p className="lede">Use the 6-digit code sent to your phone.</p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">
             <label htmlFor="phone">Phone number</label>
@@ -41,27 +49,38 @@ export default function LoginPage() {
             />
           </div>
           <div className="form-field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="otp">Reset code</label>
+            <input
+              id="otp"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="password">New password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              autoComplete="current-password"
+              minLength={6}
+              autoComplete="new-password"
             />
           </div>
           {error ? <p className="status error">{error}</p> : null}
+          {ok ? <p className="status ok">{ok}</p> : null}
           <div className="form-actions">
             <button className="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Signing in…' : 'Sign in'}
+              {busy ? 'Updating…' : 'Update password'}
             </button>
           </div>
         </form>
         <p className="muted-link" style={{ marginTop: '1rem' }}>
-          New here? <Link to="/register">Create an account</Link>
-          {' · '}
-          <Link to="/forgot-password">Forgot password?</Link>
+          <Link to="/forgot-password">Request a new code</Link>
         </p>
       </div>
     </div>

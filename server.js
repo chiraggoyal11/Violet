@@ -37,12 +37,22 @@ const authLimiter = rateLimit({
 
 connectDB();
 
+app.get('/api/violet/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    version: 2,
+    features: ['multi-image', 'messages', 'notifications', 'password-reset']
+  });
+});
+
 app.use('/api/violet/auth', authLimiter, require('./routes/user'));
 app.use('/api/violet/products', require('./routes/product'));
 app.use('/api/violet/favorites', require('./routes/favorites'));
 app.use('/api/violet/cart', require('./routes/cart'));
 app.use('/api/violet/orders', require('./routes/orders'));
 app.use('/api/violet/reviews', require('./routes/reviews'));
+app.use('/api/violet/messages', require('./routes/messages'));
+app.use('/api/violet/notifications', require('./routes/notifications'));
 
 const { s3Configured, ensureBucket } = require('./utils/s3');
 if (s3Configured) {

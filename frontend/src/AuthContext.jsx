@@ -71,8 +71,10 @@ export function AuthProvider({ children }) {
         persist(data.token, data.user);
         return data;
       },
-      async register(username, phone_no, password) {
-        const data = await api.register({ username, phone_no, password });
+      async register(username, phone_no, password, email = '') {
+        const payload = { username, phone_no, password };
+        if (email) payload.email = email;
+        const data = await api.register(payload);
         if (!data.success) throw new Error(data.msg || 'Registration failed');
         persist(data.token, data.user);
         return data;

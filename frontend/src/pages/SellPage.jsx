@@ -12,7 +12,7 @@ export default function SellPage() {
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('Other');
   const [stock, setStock] = useState(1);
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,7 +33,7 @@ export default function SellPage() {
         price: price.trim(),
         category,
         stock,
-        imageFile,
+        imageFiles,
       });
       if (!data.success) throw new Error(data.msg || 'Could not add product');
       setOk('Product listed. It will appear in the catalog.');
@@ -42,7 +42,7 @@ export default function SellPage() {
       setPrice('');
       setCategory('Other');
       setStock(1);
-      setImageFile(null);
+      setImageFiles([]);
       e.target.reset?.();
     } catch (err) {
       setError(err.message || 'Could not add product');
@@ -109,13 +109,17 @@ export default function SellPage() {
             />
           </div>
           <div className="form-field">
-            <label htmlFor="image">Product image (optional)</label>
+            <label htmlFor="image">Product photos (optional, up to 8)</label>
             <input
               id="image"
               type="file"
               accept="image/*"
-              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={(e) => setImageFiles(Array.from(e.target.files || []).slice(0, 8))}
             />
+            {imageFiles.length ? (
+              <p className="muted-link">{imageFiles.length} photo(s) selected</p>
+            ) : null}
           </div>
           {error ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}

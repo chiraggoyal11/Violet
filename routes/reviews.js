@@ -4,6 +4,7 @@ const Review = require('../models/review');
 const Product = require('../models/product');
 const User = require('../models/user');
 const user_jwt = require('../middleware/user_jwt');
+const { notifyUser } = require('../utils/notifications');
 
 router.get('/product/:productId', async (req, res) => {
   try {
@@ -54,6 +55,14 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+
+    await notifyUser({
+      user_id: product.user_id,
+      type: 'review',
+      title: 'New review on your listing',
+      body: `${user?.username || 'A buyer'} rated ${product.Product_Name} ${rating}/5`,
+      link: `/product/${product._id}`
+    });
 
     return res.status(200).json({ success: true, msg: 'Review saved', review });
   } catch (error) {
