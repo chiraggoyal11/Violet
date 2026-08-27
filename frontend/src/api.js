@@ -8,7 +8,7 @@ const MSG_BASE = '/api/violet/messages';
 const NOTE_BASE = '/api/violet/notifications';
 
 const GATEWAY_STATUSES = new Set([502, 503, 504]);
-const WAKE_RETRY_MS = [0, 1500, 3000, 5000, 8000, 12000];
+const WAKE_RETRY_MS = [0, 2000, 4000, 8000, 12000, 16000, 20000];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
