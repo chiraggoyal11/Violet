@@ -23,6 +23,8 @@ GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
 
 ## 3. Configure the frontend
 
+### Local development
+
 Create `frontend/.env`:
 
 ```env
@@ -31,7 +33,12 @@ VITE_GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
 
 Use the **same Client ID** as the API.
 
-Restart both servers after changing env files.
+### Production (Render Docker)
+
+Set `GOOGLE_CLIENT_ID` on the Render service, then **Clear build cache & deploy**.
+The Dockerfile bakes that value into the SPA automatically — no separate frontend host (e.g. Vercel) is required.
+
+Restart both servers after changing local env files.
 
 ## 4. How it works
 

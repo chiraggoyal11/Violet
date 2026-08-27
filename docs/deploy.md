@@ -110,9 +110,11 @@ Then **Manual Deploy** → clear build cache / redeploy once.
 3. **Authorized redirect URIs** → add the same URL
 4. Save
 5. On Render, set `GOOGLE_CLIENT_ID` to your Client ID
-6. Redeploy (or restart) the service
+6. **Manual Deploy → Clear build cache & deploy** (required so the Client ID is baked into the frontend)
 
-The frontend loads the Google Client ID from the API, so you do **not** need to rebuild for Google.
+The Docker build copies `GOOGLE_CLIENT_ID` into the SPA as `VITE_GOOGLE_CLIENT_ID`, so **Continue with Google** still shows even if `/api/violet/auth/config` is slow or returns 502 during a free-tier wake-up. The SPA also retries that config endpoint a few times as a fallback.
+
+**You do not need Vercel (or any separate frontend host).** Render serves the built React app and the API from the same Docker service.
 
 ---
 
@@ -144,5 +146,6 @@ Then open http://localhost:5000
 | App crash on boot | Check `MONGO` string; Atlas Network Access must allow `0.0.0.0/0` |
 | Images fail | Confirm AWS keys + bucket `violetchirag` in `ap-south-1` |
 | CORS errors | Set `CORS_ORIGIN` exactly to your Render HTTPS URL |
-| Google button missing | Set `GOOGLE_CLIENT_ID` and add the Render URL as a JavaScript origin |
+| Google button missing | Set `GOOGLE_CLIENT_ID`, add the Render URL as a JavaScript origin, then **Clear build cache & deploy** |
+| Google button still missing after env set | Hard-refresh `/login` (Ctrl+Shift+R). Confirm the latest deploy finished. |
 | Health check fails | Ensure `/api/violet/health` returns 200 |
