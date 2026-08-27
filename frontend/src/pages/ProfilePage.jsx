@@ -45,7 +45,9 @@ export default function ProfilePage() {
       <div className="panel">
         <h1>Your profile</h1>
         <p className="lede">
-          Phone {formatPhoneDisplay(user)} is used to sign in and cannot be changed here.
+          {user.auth_provider === 'google'
+            ? `Signed in with Google${user.email ? ` (${user.email})` : ''}. Phone can be added later for SMS features.`
+            : `Phone ${formatPhoneDisplay(user)} is used to sign in and cannot be changed here.`}
         </p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">

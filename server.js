@@ -41,7 +41,7 @@ app.get('/api/violet/health', (req, res) => {
   res.status(200).json({
     success: true,
     version: 2,
-    features: ['multi-image', 'messages', 'notifications', 'password-reset']
+    features: ['multi-image', 'messages', 'notifications', 'password-reset', 'google-oauth']
   });
 });
 

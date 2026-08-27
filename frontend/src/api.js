@@ -70,6 +70,9 @@ export const api = {
     request(AUTH_BASE, '/register', { method: 'POST', body: payload }),
   login: (payload) =>
     request(AUTH_BASE, '/login', { method: 'POST', body: payload }),
+  authConfig: () => request(AUTH_BASE, '/config'),
+  loginWithGoogle: (credential) =>
+    request(AUTH_BASE, '/google', { method: 'POST', body: { credential } }),
   forgotPassword: ({ country_code, phone_no }) =>
     request(AUTH_BASE, '/forgot-password', {
       method: 'POST',

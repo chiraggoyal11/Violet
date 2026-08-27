@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PhoneField from '../components/PhoneField';
 import PasswordField from '../components/PasswordField';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import { validatePassword, validatePhoneNumber } from '../utils/validation';
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
@@ -39,11 +40,30 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleGoogle(response) {
+    if (!response?.credential) return;
+    setBusy(true);
+    setError('');
+    try {
+      await loginWithGoogle(response.credential);
+      navigate('/sell');
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="auth-layout">
       <div className="panel">
         <h1>Join Violet</h1>
-        <p className="lede">Create a seller profile and start listing goods.</p>
+        <p className="lede">Continue with Google or create a seller profile with phone and password.</p>
+        <GoogleSignInButton
+          mode="signup"
+          onSuccess={handleGoogle}
+          onError={() => setError('Google sign-in was cancelled or failed')}
+        />
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">
             <label htmlFor="username">Display name</label>

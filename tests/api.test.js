@@ -74,6 +74,20 @@ describe('Violet API', () => {
     assert.match(shortPhone.body.msg, /10 digits/i);
   });
 
+  it('signs in with Google using a verified ID token', async () => {
+    const res = await request(app)
+      .post('/api/violet/auth/google')
+      .send({ credential: 'test-google-token' })
+      .expect(200);
+
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.token);
+    assert.equal(res.body.user.auth_provider, 'google');
+    assert.equal(res.body.user.google_id, 'test-google-sub');
+    assert.equal(res.body.user.email, 'google.test@example.com');
+    assert.equal(res.body.user.password, undefined);
+  });
+
   it('registers a user without returning a password hash', async () => {
     const res = await request(app)
       .post('/api/violet/auth/register')
