@@ -65,6 +65,12 @@ export function AuthProvider({ children }) {
       setUserSession(nextToken, nextUser) {
         persist(nextToken, nextUser);
       },
+      async loginWithGoogle(credential) {
+        const data = await api.loginWithGoogle(credential);
+        if (!data.success) throw new Error(data.msg || 'Google sign-in failed');
+        persist(data.token, data.user);
+        return data;
+      },
       async login(country_code, phone_no, password) {
         const data = await api.login({ country_code, phone_no, password });
         if (!data.success) throw new Error(data.msg || 'Login failed');

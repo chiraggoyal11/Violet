@@ -5,6 +5,7 @@ const bcryptjs = require('bcryptjs');
 const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
 const { createPasswordOtp, verifyPasswordOtp, devOtpEnabled } = require('../utils/otp');
+const { googleConfigured, verifyGoogleCredential } = require('../utils/googleAuth');
 
 const {
     validatePassword,
@@ -48,6 +49,68 @@ function signToken(userId) {
         );
     });
 }
+
+router.get('/config', (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID || '';
+    return res.status(200).json({
+        success: true,
+        googleEnabled: Boolean(clientId),
+        googleClientId: clientId
+    });
+});
+
+router.post('/google', async (req, res) => {
+    try {
+        const credential = req.body.credential || req.body.id_token || '';
+        const profile = await verifyGoogleCredential(credential);
+
+        let user = await User.findOne({ google_id: profile.google_id });
+
+        if (!user && profile.email) {
+            user = await User.findOne({ email: profile.email });
+            if (user) {
+                if (user.google_id && user.google_id !== profile.google_id) {
+                    return res.status(409).json({
+                        success: false,
+                        msg: 'This email is linked to a different Google account'
+                    });
+                }
+                user.google_id = profile.google_id;
+                if (profile.avatar) user.avatar = profile.avatar;
+                await user.save();
+            }
+        }
+
+        if (!user) {
+            user = await User.create({
+                username: profile.username,
+                email: profile.email || undefined,
+                google_id: profile.google_id,
+                auth_provider: 'google',
+                avatar: profile.avatar
+            });
+        } else {
+            if (profile.avatar) user.avatar = profile.avatar;
+            if (profile.username && user.username !== profile.username) {
+                user.username = profile.username;
+            }
+            await user.save();
+        }
+
+        const token = await signToken(user.id);
+        return res.status(200).json({
+            success: true,
+            token,
+            user: publicUser(user)
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(error.status || 500).json({
+            success: false,
+            msg: error.message || 'Google sign-in failed'
+        });
+    }
+});
 
 router.get('/', user_jwt, async (req, res) => {
     try {
@@ -138,6 +201,7 @@ router.post('/register', async (req, res) => {
 
         const user = new User({
             username,
+            auth_provider: 'local',
             country_code: phone.country_code,
             phone_no: phone.phone_no,
             ...(email ? { email } : {}),
@@ -185,6 +249,13 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({
                 success: false,
                 msg: "Invalid Phone number , doesn't exist. "
+            });
+        }
+
+        if (!user.password) {
+            return res.status(400).json({
+                success: false,
+                msg: 'This account uses Google sign-in. Continue with Google instead.'
             });
         }
 

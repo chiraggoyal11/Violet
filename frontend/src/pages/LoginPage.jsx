@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import PhoneField from '../components/PhoneField';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import { validatePhoneNumber } from '../utils/validation';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [countryCode, setCountryCode] = useState('+91');
   const [phone_no, setPhone] = useState('');
@@ -35,11 +36,30 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogle(response) {
+    if (!response?.credential) return;
+    setBusy(true);
+    setError('');
+    try {
+      await loginWithGoogle(response.credential);
+      navigate('/catalog');
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="auth-layout">
       <div className="panel">
         <h1>Welcome back</h1>
-        <p className="lede">Sign in with the phone number on your Violet account.</p>
+        <p className="lede">Sign in with Google or the phone number on your Violet account.</p>
+        <GoogleSignInButton
+          mode="signin"
+          onSuccess={handleGoogle}
+          onError={() => setError('Google sign-in was cancelled or failed')}
+        />
         <form className="form" onSubmit={onSubmit}>
           <PhoneField
             countryCode={countryCode}

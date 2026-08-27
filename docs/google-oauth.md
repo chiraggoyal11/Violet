@@ -1,0 +1,49 @@
+# Google OAuth setup
+
+Violet supports **Continue with Google** on the login and register pages.
+
+## 1. Create Google OAuth credentials
+
+1. Open [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Create an **OAuth 2.0 Client ID** (Web application)
+3. Add **Authorized JavaScript origins**:
+   - `http://localhost:5173` (local dev)
+   - Your production URL (e.g. `https://your-domain.com`)
+4. Copy the **Client ID** (ends with `.apps.googleusercontent.com`)
+
+No client secret is required for the ID-token flow used by Violet.
+
+## 2. Configure the API
+
+In `config/config.env`:
+
+```env
+GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
+```
+
+## 3. Configure the frontend
+
+Create `frontend/.env`:
+
+```env
+VITE_GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
+```
+
+Use the **same Client ID** as the API.
+
+Restart both servers after changing env files.
+
+## 4. How it works
+
+- User clicks **Continue with Google** on login or register
+- Google returns an ID token to the browser
+- Violet API verifies the token with Google and creates or links the account
+- API returns the same JWT used for phone/password login
+
+## Account linking
+
+If a user already registered with the same email via phone/password, signing in with Google links the Google account to that profile.
+
+## Cursor Cloud Agents
+
+Add `GOOGLE_CLIENT_ID` to environment secrets and set `VITE_GOOGLE_CLIENT_ID` in the frontend build environment (or `frontend/.env`).

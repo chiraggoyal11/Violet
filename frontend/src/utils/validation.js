@@ -32,6 +32,9 @@ export function validatePhoneNumber(phone) {
 
 export function formatPhoneDisplay(user) {
   if (!user) return '';
+  if (!user.phone_no) {
+    return user.auth_provider === 'google' ? 'Google account — phone not set' : 'Not set';
+  }
   const code = user.country_code || '+91';
-  return `${code} ${user.phone_no || ''}`.trim();
+  return `${code} ${user.phone_no}`.trim();
 }
