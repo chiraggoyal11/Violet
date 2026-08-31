@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
+const { isMongoReady, requireMongo } = require('./utils/mongo');
 
 dotenv.config({
   path: './config/config.env'
@@ -49,21 +50,23 @@ connectDB().catch((err) => {
 });
 
 app.get('/api/violet/health', (req, res) => {
+  const mongo = isMongoReady();
   res.status(200).json({
     success: true,
-    version: 2,
+    version: 3,
+    mongo,
     features: ['multi-image', 'messages', 'notifications', 'password-reset', 'google-oauth']
   });
 });
 
 app.use('/api/violet/auth', authLimiter, require('./routes/user'));
 app.use('/api/violet/products', require('./routes/product'));
-app.use('/api/violet/favorites', require('./routes/favorites'));
-app.use('/api/violet/cart', require('./routes/cart'));
-app.use('/api/violet/orders', require('./routes/orders'));
-app.use('/api/violet/reviews', require('./routes/reviews'));
-app.use('/api/violet/messages', require('./routes/messages'));
-app.use('/api/violet/notifications', require('./routes/notifications'));
+app.use('/api/violet/favorites', requireMongo, require('./routes/favorites'));
+app.use('/api/violet/cart', requireMongo, require('./routes/cart'));
+app.use('/api/violet/orders', requireMongo, require('./routes/orders'));
+app.use('/api/violet/reviews', requireMongo, require('./routes/reviews'));
+app.use('/api/violet/messages', requireMongo, require('./routes/messages'));
+app.use('/api/violet/notifications', requireMongo, require('./routes/notifications'));
 
 const { s3Configured, ensureBucket } = require('./utils/s3');
 if (s3Configured) {

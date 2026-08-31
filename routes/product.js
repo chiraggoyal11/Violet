@@ -8,11 +8,14 @@ const {
   attachImageUrls,
   uploadProductImages
 } = require('../utils/s3');
+const { requireMongo, mongoFailure } = require('../utils/mongo');
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
 });
+
+router.use(requireMongo);
 
 function parsePagination(query) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
@@ -114,7 +117,7 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ success: false, msg: 'Failed to load products' });
+    return mongoFailure(res, error, 'Failed to load products');
   }
 });
 
@@ -142,7 +145,7 @@ router.get('/user/:userId', async (req, res) => {
     return res.status(200).json({ success: true, product: products });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ success: false, msg: 'Failed to load products' });
+    return mongoFailure(res, error, 'Failed to load products');
   }
 });
 

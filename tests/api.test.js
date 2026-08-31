@@ -244,6 +244,62 @@ describe('Violet API', () => {
     assert.ok(notes.body.notifications.some((n) => n.type === 'message'));
   });
 
+  it('clamps cart quantity to stock and supports checkout', async () => {
+    const listing = await request(app)
+      .post('/api/violet/products')
+      .set('Authorization', `Bearer ${token}`)
+      .field('Product_Name', 'Cart Test Mug')
+      .field('Product_Detail', 'Stock limited mug')
+      .field('Price', '12.00')
+      .field('category', 'Home')
+      .field('stock', '2')
+      .expect(200);
+
+    const cartProductId = listing.body.product._id;
+
+    await request(app)
+      .post('/api/violet/cart/items')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ product_id: cartProductId, quantity: 1 })
+      .expect(200);
+
+    const updated = await request(app)
+      .put(`/api/violet/cart/items/${cartProductId}`)
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ quantity: 99 })
+      .expect(200);
+
+    assert.equal(updated.body.items[0].quantity, 2);
+
+    const blockedReview = await request(app)
+      .post(`/api/violet/reviews/product/${cartProductId}`)
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ rating: 5, comment: 'too soon' })
+      .expect(403);
+    assert.match(blockedReview.body.msg, /Buy this product/i);
+
+    const checkout = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ note: 'test checkout' })
+      .expect(200);
+
+    assert.ok(checkout.body.order._id);
+
+    const review = await request(app)
+      .post(`/api/violet/reviews/product/${cartProductId}`)
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ rating: 5, comment: 'after purchase' })
+      .expect(200);
+    assert.equal(review.body.success, true);
+
+    const orders = await request(app)
+      .get('/api/violet/orders')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.ok(orders.body.orders.length >= 1);
+  });
+
   it('updates and deletes owned products (including S3 object)', async () => {
     await request(app)
       .put(`/api/violet/products/${productId}`)

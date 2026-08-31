@@ -17,6 +17,7 @@ import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import RequireAuth from './components/RequireAuth';
 
 function Shell() {
   const location = useLocation();
@@ -34,16 +35,86 @@ function Shell() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/messages" element={<MessagesPage />} />
-          <Route path="/messages/:id" element={<MessagesPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/sell" element={<SellPage />} />
-          <Route path="/mine" element={<MinePage />} />
-          <Route path="/seller" element={<SellerDashboardPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/favorites" element={<FavoritesPage />} />
+          <Route
+            path="/messages"
+            element={
+              <RequireAuth>
+                <MessagesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/messages/:id"
+            element={
+              <RequireAuth>
+                <MessagesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <RequireAuth>
+                <NotificationsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/sell"
+            element={
+              <RequireAuth>
+                <SellPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/mine"
+            element={
+              <RequireAuth>
+                <MinePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/seller"
+            element={
+              <RequireAuth>
+                <SellerDashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/cart"
+            element={
+              <RequireAuth>
+                <CartPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <RequireAuth>
+                <OrdersPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/favorites"
+            element={
+              <RequireAuth>
+                <FavoritesPage />
+              </RequireAuth>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

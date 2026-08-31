@@ -4,8 +4,9 @@ const User = require('../models/user');
 const bcryptjs = require('bcryptjs');
 const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
-const { createPasswordOtp, verifyPasswordOtp, devOtpEnabled } = require('../utils/otp');
+const { createPasswordOtp, verifyPasswordOtp, shouldReturnOtpInResponse } = require('../utils/otp');
 const { googleConfigured, verifyGoogleCredential } = require('../utils/googleAuth');
+const { requireMongo, mongoFailure } = require('../utils/mongo');
 
 const {
     validatePassword,
@@ -59,6 +60,9 @@ router.get('/config', (req, res) => {
     });
 });
 
+// All routes below need MongoDB
+router.use(requireMongo);
+
 router.post('/google', async (req, res) => {
     try {
         const credential = req.body.credential || req.body.id_token || '';
@@ -91,9 +95,7 @@ router.post('/google', async (req, res) => {
             });
         } else {
             if (profile.avatar) user.avatar = profile.avatar;
-            if (profile.username && user.username !== profile.username) {
-                user.username = profile.username;
-            }
+            // Do not overwrite an existing display name on every Google sign-in.
             await user.save();
         }
 
@@ -105,16 +107,7 @@ router.post('/google', async (req, res) => {
         });
     } catch (error) {
         console.log(error);
-        const mongoDown =
-            error?.name === 'MongoServerSelectionError' ||
-            error?.name === 'MongooseError' ||
-            /buffering timed out|ECONNREFUSED|MongoNetworkError/i.test(error?.message || '');
-        return res.status(mongoDown ? 503 : (error.status || 500)).json({
-            success: false,
-            msg: mongoDown
-                ? 'Database is temporarily unavailable — try again in a moment'
-                : (error.message || 'Google sign-in failed')
-        });
+        return mongoFailure(res, error, error.message || 'Google sign-in failed');
     }
 });
 
@@ -127,7 +120,7 @@ router.get('/', user_jwt, async (req, res) => {
         return res.status(200).json({ success: true, user });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ success: false, msg: 'Server error' });
+        return mongoFailure(res, error, 'Server error');
     }
 });
 
@@ -163,7 +156,7 @@ router.put('/profile', user_jwt, async (req, res) => {
         });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to update profile' });
+        return mongoFailure(res, error, 'Failed to update profile');
     }
 });
 
@@ -231,7 +224,7 @@ router.post('/register', async (req, res) => {
                 msg: 'user already exist'
             });
         }
-        return res.status(500).json({ success: false, msg: 'Registration failed' });
+        return mongoFailure(res, err, 'Registration failed');
     }
 });
 
@@ -281,7 +274,7 @@ router.post('/login', async (req, res) => {
         });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed' });
+        return mongoFailure(res, error, 'Login failed');
     }
 });
 
@@ -297,22 +290,23 @@ router.post('/forgot-password', async (req, res) => {
         if (!user) {
             return res.status(200).json({
                 success: true,
-                msg: 'If that phone number exists, a reset code was sent.'
+                msg: 'If that phone number is registered, a reset code is available for 15 minutes.'
             });
         }
 
         const otp = await createPasswordOtp(otpKey);
         const payload = {
             success: true,
-            msg: 'If that phone number exists, a reset code was sent.'
+            msg: 'If that phone number is registered, a reset code is available for 15 minutes.'
         };
-        if (devOtpEnabled()) {
-            payload.devOtp = otp;
+        if (shouldReturnOtpInResponse()) {
+            payload.resetCode = otp;
+            payload.devOtp = otp; // backward compatible with older frontend
         }
         return res.status(200).json(payload);
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to send reset code' });
+        return mongoFailure(res, error, 'Failed to send reset code');
     }
 });
 
@@ -354,7 +348,7 @@ router.post('/reset-password', async (req, res) => {
         return res.status(200).json({ success: true, msg: 'Password updated. You can sign in now.' });
     } catch (error) {
         console.log(error);
-        return res.status(500).json({ success: false, msg: 'Failed to reset password' });
+        return mongoFailure(res, error, 'Failed to reset password');
     }
 });
 

@@ -22,11 +22,13 @@ export default function RegisterPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
+    setStatus('Creating account — waiting for server…');
 
     const phoneError = validatePhoneNumber(phone_no);
     const passwordError = validatePassword(password);
     if (phoneError || passwordError) {
       setError(phoneError || passwordError);
+      setStatus('');
       setBusy(false);
       return;
     }
@@ -35,6 +37,7 @@ export default function RegisterPage() {
       await register(username.trim(), countryCode, phone_no.trim(), password, email.trim());
       navigate('/sell');
     } catch (err) {
+      setStatus('');
       setError(err.message || 'Registration failed');
     } finally {
       setBusy(false);

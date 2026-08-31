@@ -32,7 +32,8 @@ export default function ForgotPasswordPage() {
         phone_no: phone_no.trim(),
       });
       setOk(data.msg || 'Reset code sent.');
-      if (data.devOtp) setDevOtp(data.devOtp);
+      const code = data.resetCode || data.devOtp;
+      if (code) setDevOtp(code);
     } catch (err) {
       setError(err.message || 'Could not send reset code');
     } finally {
@@ -44,7 +45,10 @@ export default function ForgotPasswordPage() {
     <div className="auth-layout">
       <div className="panel">
         <h1>Reset password</h1>
-        <p className="lede">Enter your phone number. We will send a 6-digit reset code.</p>
+        <p className="lede">
+          Enter your phone number to get a 6-digit reset code. If SMS is not configured, the
+          code is shown on this page once.
+        </p>
         <form className="form" onSubmit={onSubmit}>
           <PhoneField
             countryCode={countryCode}
@@ -56,7 +60,7 @@ export default function ForgotPasswordPage() {
           {ok ? <p className="status ok">{ok}</p> : null}
           {devOtp ? (
             <p className="status ok">
-              Dev mode code: <strong>{devOtp}</strong> — use it on the reset page.
+              Your reset code: <strong>{devOtp}</strong> — use it on the Enter code page.
             </p>
           ) : null}
           <div className="form-actions">

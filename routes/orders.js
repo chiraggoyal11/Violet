@@ -49,18 +49,34 @@ router.post('/checkout', user_jwt, async (req, res) => {
     let total = 0;
 
     for (const item of cart.items) {
-      const product = await Product.findById(item.product_id);
-      if (!product || product.status !== 'active' || product.stock < item.quantity) {
+      const product = await Product.findOneAndUpdate(
+        {
+          _id: item.product_id,
+          status: 'active',
+          stock: { $gte: item.quantity },
+          user_id: { $ne: req.user.id }
+        },
+        { $inc: { stock: -item.quantity } },
+        { new: true }
+      );
+
+      if (!product) {
+        const existing = await Product.findById(item.product_id);
+        if (existing && String(existing.user_id) === String(req.user.id)) {
+          return res.status(400).json({
+            success: false,
+            msg: 'You cannot buy your own listing'
+          });
+        }
         return res.status(400).json({
           success: false,
-          msg: `Product unavailable: ${product?.Product_Name || item.product_id}`
+          msg: `Product unavailable: ${existing?.Product_Name || item.product_id}`
         });
       }
-      if (String(product.user_id) === String(req.user.id)) {
-        return res.status(400).json({
-          success: false,
-          msg: 'You cannot buy your own listing'
-        });
+
+      if (product.stock === 0) {
+        product.status = 'sold';
+        await product.save();
       }
 
       const line = (Number(product.Price) || 0) * item.quantity;
@@ -72,10 +88,6 @@ router.post('/checkout', user_jwt, async (req, res) => {
         quantity: item.quantity,
         seller_id: product.user_id
       });
-
-      product.stock = Math.max(0, product.stock - item.quantity);
-      if (product.stock === 0) product.status = 'sold';
-      await product.save();
     }
 
     const order = await Order.create({
