@@ -14,12 +14,14 @@ function formatPrice(price) {
 export { formatPrice };
 
 export default function ProductCard({ product, to }) {
-  const image =
-    product.ImageUrls?.[0] || product.ImageUrl || null;
+  const image = product.ImageUrls?.[0] || product.ImageUrl || null;
   const sold = product.status === 'sold' || Number(product.stock) === 0;
+  const meta = [product.category, product.colour !== 'Other' ? product.colour : null]
+    .filter(Boolean)
+    .join(' · ');
 
   const card = (
-    <article className={`product-tile ${sold ? 'is-sold' : ''}`}>
+    <article className={`product-tile${sold ? ' is-sold' : ''}`}>
       <div className="product-media">
         {image ? (
           <img src={image} alt={product.Product_Name} loading="lazy" />
@@ -27,14 +29,9 @@ export default function ProductCard({ product, to }) {
           <div className="product-fallback">{product.Product_Name}</div>
         )}
         {sold ? <span className="badge sold">Sold</span> : null}
-        {product.category ? (
-          <span className="badge category">{product.category}</span>
-        ) : null}
-        {product.colour && product.colour !== 'Other' ? (
-          <span className="badge colour">{product.colour}</span>
-        ) : null}
       </div>
       <div className="product-body">
+        {meta ? <p className="product-meta">{meta}</p> : null}
         <h3>{product.Product_Name}</h3>
         <p>{product.Product_Detail}</p>
         <div className="product-price">{formatPrice(product.Price)}</div>

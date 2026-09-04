@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import EmptyState from '../components/EmptyState';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 
 export default function FavoritesPage() {
@@ -36,17 +37,21 @@ export default function FavoritesPage() {
     <section className="section">
       <div className="section-heading">
         <div>
+          <p className="section-kicker">Saved</p>
           <h2>Favorites</h2>
-          <p>Listings you have saved.</p>
+          <p>Pieces you want to revisit later.</p>
         </div>
       </div>
       {error ? <p className="status error">{error}</p> : null}
       {loading ? (
         <SkeletonGrid count={4} />
       ) : products.length === 0 ? (
-        <p className="empty">
-          No favorites yet. <Link to="/catalog">Find something you love</Link>
-        </p>
+        <EmptyState
+          title="No favorites yet"
+          body="Tap Favorite on a listing to save it here."
+          actionTo="/catalog"
+          actionLabel="Browse shop"
+        />
       ) : (
         <div className="product-grid">
           {products.map((product) => (

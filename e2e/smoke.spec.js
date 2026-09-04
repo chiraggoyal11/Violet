@@ -18,7 +18,7 @@ test('register, browse catalog, and open password reset', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/sell/);
   await page.goto('/catalog');
-  await expect(page.getByRole('heading', { name: /^home$/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /handmade finds/i })).toBeVisible();
 
   await page.goto('/forgot-password');
   await page.getByLabel('Country code').selectOption('+91');
@@ -50,7 +50,7 @@ test('catalog product opens detail page', async ({ page, request }) => {
   });
 
   await page.goto('/catalog');
-  await expect(page.getByRole('heading', { name: /^home$/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /handmade finds/i })).toBeVisible();
   const productLink = page.getByRole('link', { name: new RegExp(`view ${productName}`, 'i') }).first();
   await expect(productLink).toBeVisible({ timeout: 10000 });
   await productLink.click();

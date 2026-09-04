@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { api } from '../api';
+import EmptyState from '../components/EmptyState';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 
 const PAGE_SIZE = 12;
@@ -138,8 +139,9 @@ export default function CatalogPage() {
     <section className="section">
       <div className="section-heading">
         <div>
-          <h2>Home</h2>
-          <p>Browse handmade listings — search, filter, and sort what you love.</p>
+          <p className="section-kicker">Shop</p>
+          <h2>Handmade finds</h2>
+          <p>Search, filter, and sort listings from makers on Violet.</p>
         </div>
       </div>
 
@@ -147,12 +149,12 @@ export default function CatalogPage() {
         <form className="home-search" onSubmit={applySearch}>
           <input
             type="search"
-            placeholder="Search products"
+            placeholder="Search handmade goods"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search products"
           />
-          <button className="btn btn-primary" type="submit" disabled={loading}>
+          <button className="btn btn-accent" type="submit" disabled={loading}>
             Search
           </button>
         </form>
@@ -185,6 +187,46 @@ export default function CatalogPage() {
           </label>
         </div>
       </div>
+
+      {activeFilterCount || filters.name ? (
+        <div className="active-chips" aria-label="Active filters">
+          {filters.name ? (
+            <button
+              type="button"
+              className="active-chip"
+              onClick={() => {
+                setQuery('');
+                setPage(1);
+                setFilters((prev) => ({ ...prev, name: '' }));
+              }}
+            >
+              Search: {filters.name} ×
+            </button>
+          ) : null}
+          {filters.category ? (
+            <button type="button" className="active-chip" onClick={openFilters}>
+              {filters.category}
+            </button>
+          ) : null}
+          {filters.colour ? (
+            <button type="button" className="active-chip" onClick={openFilters}>
+              {filters.colour}
+            </button>
+          ) : null}
+          {filters.minPrice !== '' || filters.maxPrice !== '' ? (
+            <button type="button" className="active-chip" onClick={openFilters}>
+              Price
+              {filters.minPrice !== '' ? ` ≥ ${filters.minPrice}` : ''}
+              {filters.maxPrice !== '' ? ` ≤ ${filters.maxPrice}` : ''}
+            </button>
+          ) : null}
+          {filters.status && filters.status !== 'active' ? (
+            <button type="button" className="active-chip" onClick={openFilters}>
+              {filters.status === 'sold' ? 'Sold' : 'All availability'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {filtersOpen ? (
         <div className="filter-overlay" role="presentation" onClick={() => setFiltersOpen(false)}>
@@ -293,7 +335,10 @@ export default function CatalogPage() {
       {loading || isPending ? (
         <SkeletonGrid />
       ) : products.length === 0 ? (
-        <p className="empty">No products match these filters. Try broadening your search.</p>
+        <EmptyState
+          title="No matches"
+          body="Try clearing filters or searching a different material, colour, or maker."
+        />
       ) : (
         <div className="product-grid">
           {products.map((product) => (
