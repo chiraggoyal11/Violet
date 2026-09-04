@@ -32,6 +32,11 @@ export default function CartPage() {
     if (token) load();
   }, [token]);
 
+  useEffect(() => {
+    const defaultNote = user?.settings?.defaultCheckoutNote;
+    if (defaultNote) setNote(defaultNote);
+  }, [user]);
+
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
 

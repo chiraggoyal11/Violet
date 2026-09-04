@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import { clearNotificationBadge } from '../components/Header';
 
 export default function NotificationsPage() {
   const { user, token, booting } = useAuth();
@@ -25,7 +26,10 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!token) return;
     load();
-    api.markAllNotificationsRead(token).catch(() => {});
+    api
+      .markAllNotificationsRead(token)
+      .then(() => clearNotificationBadge())
+      .catch(() => {});
   }, [token]);
 
   if (booting) return <p className="empty">Checking your session…</p>;

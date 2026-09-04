@@ -151,6 +151,8 @@ export const api = {
   me: (token) => request(AUTH_BASE, '/', { token }),
   updateProfile: (payload, token) =>
     request(AUTH_BASE, '/profile', { method: 'PUT', body: payload, token }),
+  updateSettings: (payload, token) =>
+    request(AUTH_BASE, '/settings', { method: 'PUT', body: payload, token }),
 
   listProducts: (opts = {}) => {
     const params = new URLSearchParams();

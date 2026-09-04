@@ -65,6 +65,10 @@ export function AuthProvider({ children }) {
       setUserSession(nextToken, nextUser) {
         persist(nextToken, nextUser);
       },
+      updateLocalUser(nextUser) {
+        if (!token) return;
+        persist(token, nextUser);
+      },
       async loginWithGoogle(credential) {
         // Render free tier often 502s while waking; ping health first, then retry POST.
         await wakeApi();

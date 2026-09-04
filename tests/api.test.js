@@ -210,6 +210,52 @@ describe('Violet API', () => {
     assert.equal(res.body.user.password, undefined);
   });
 
+  it('updates extended profile fields and settings', async () => {
+    const profile = await request(app)
+      .put('/api/violet/auth/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        username: 'UpdatedMaker',
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+        gender: 'female',
+        date_of_birth: '1990-05-12',
+        address: {
+          line1: '12 Market Street',
+          line2: 'Apt 4',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        }
+      })
+      .expect(200);
+
+    assert.equal(profile.body.user.first_name, 'Ada');
+    assert.equal(profile.body.user.last_name, 'Lovelace');
+    assert.equal(profile.body.user.gender, 'female');
+    assert.equal(profile.body.user.date_of_birth, '1990-05-12');
+    assert.equal(profile.body.user.address.city, 'Pune');
+    assert.equal(profile.body.user.address.pincode, '411001');
+
+    const settings = await request(app)
+      .put('/api/violet/auth/settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        orderUpdates: true,
+        promoAlerts: true,
+        showPhoneToBuyers: true,
+        preferredCurrency: 'USD',
+        defaultCheckoutNote: 'Leave at the lobby'
+      })
+      .expect(200);
+
+    assert.equal(settings.body.user.settings.promoAlerts, true);
+    assert.equal(settings.body.user.settings.showPhoneToBuyers, true);
+    assert.equal(settings.body.user.settings.preferredCurrency, 'USD');
+    assert.equal(settings.body.user.settings.defaultCheckoutNote, 'Leave at the lobby');
+  });
+
   it('resets password with OTP', async () => {
     const forgot = await request(app)
       .post('/api/violet/auth/forgot-password')
