@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
@@ -10,11 +10,59 @@ const QUICK_PROMPTS = [
   'Do you offer customization?',
 ];
 
+function HeartIcon({ filled }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.8"
+        d="M12 20s-7-4.4-9.2-8.2C1.2 9 2.4 6.2 5.2 5.4c1.7-.5 3.4.2 4.4 1.5C10.6 5.6 12.3 4.9 14 5.4c2.8.8 4 3.6 2.4 6.4C19 15.6 12 20 12 20Z"
+      />
+    </svg>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M18 16a3 3 0 0 0-2.1.9l-7.1-3.6a3.1 3.1 0 0 0 0-1.6l7.1-3.6A3 3 0 1 0 15 5a3 3 0 0 0 .1.8L8 9.4a3 3 0 1 0 0 5.2l7.1 3.6A3 3 0 1 0 18 16Z"
+      />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Z"
+      />
+    </svg>
+  );
+}
+
+function CartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M7 18a2 2 0 1 0 2 2 2 2 0 0 0-2-2Zm10 0a2 2 0 1 0 2 2 2 2 0 0 0-2-2ZM7.2 14h9.7l1.8-8H6.2L5.4 3H2v2h2.2l2 9Zm1.1-2L7.5 8h9.1l-.9 4H8.3Z"
+      />
+    </svg>
+  );
+}
+
 export default function ProductDetailPage() {
   const { id } = useParams();
   const { user, token } = useAuth();
   const navigate = useNavigate();
   const dialogTitleId = useId();
+  const trackRef = useRef(null);
+  const touchStartX = useRef(null);
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [average, setAverage] = useState(0);
@@ -92,6 +140,26 @@ export default function ProductDetailPage() {
       document.body.style.overflow = prev;
     };
   }, [showMessage]);
+
+  function goImage(next) {
+    if (!gallery.length) return;
+    const len = gallery.length;
+    setActiveImage(((next % len) + len) % len);
+  }
+
+  function onTouchStart(e) {
+    touchStartX.current = e.changedTouches[0]?.clientX ?? null;
+  }
+
+  function onTouchEnd(e) {
+    if (touchStartX.current == null || gallery.length < 2) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    // swipe left -> next (images slide right-to-left), swipe right -> previous
+    if (dx < 0) goImage(activeImage + 1);
+    else goImage(activeImage - 1);
+  }
 
   async function addCart() {
     if (!token) return navigate('/login');
@@ -203,7 +271,7 @@ export default function ProductDetailPage() {
       <section className="section">
         <p className="status error">{error}</p>
         <Link className="btn btn-secondary" to="/catalog">
-          Back to Home
+          Back to shop
         </Link>
       </section>
     );
@@ -214,79 +282,138 @@ export default function ProductDetailPage() {
   const thumb = gallery[0] || null;
 
   return (
-    <section className="section detail-section">
-      <Link className="muted-link" to="/catalog">
-        ← Back to Home
+    <section className="section product-detail">
+      <Link className="muted-link product-detail-back" to="/catalog">
+        ← Back to shop
       </Link>
-      <div className="detail-layout">
-        <div className="detail-media">
-          {gallery.length ? (
-            <>
-              <img src={gallery[activeImage]} alt={product.Product_Name} />
-              {gallery.length > 1 ? (
-                <div className="gallery-thumbs">
-                  {gallery.map((url, i) => (
+
+      <header className="product-detail-top">
+        <p className="eyebrow">
+          {product.category || 'Other'}
+          {product.colour && product.colour !== 'Other' ? ` · ${product.colour}` : ''}
+          {average ? ` · ★ ${average}` : ''}
+        </p>
+        <h1>{product.Product_Name}</h1>
+        <p className="detail-price">{formatPrice(product.Price)}</p>
+      </header>
+
+      <div
+        className="product-slider"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {gallery.length ? (
+          <>
+            <div
+              className="product-slider-track"
+              ref={trackRef}
+              style={{ transform: `translateX(-${activeImage * 100}%)` }}
+            >
+              {gallery.map((url, i) => (
+                <div className="product-slider-slide" key={url + i}>
+                  <img src={url} alt={`${product.Product_Name} ${i + 1}`} />
+                </div>
+              ))}
+            </div>
+            {sold ? <span className="badge sold">Sold</span> : null}
+            {gallery.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="slider-nav prev"
+                  aria-label="Previous image"
+                  onClick={() => goImage(activeImage - 1)}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="slider-nav next"
+                  aria-label="Next image"
+                  onClick={() => goImage(activeImage + 1)}
+                >
+                  ›
+                </button>
+                <div className="slider-dots" role="tablist" aria-label="Product images">
+                  {gallery.map((_, i) => (
                     <button
-                      key={url + i}
+                      key={i}
                       type="button"
+                      role="tab"
+                      aria-selected={i === activeImage}
                       className={i === activeImage ? 'active' : ''}
                       onClick={() => setActiveImage(i)}
-                    >
-                      <img src={url} alt="" />
-                    </button>
+                    />
                   ))}
                 </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="product-fallback large">{product.Product_Name}</div>
-          )}
-          {sold ? <span className="badge sold">Sold</span> : null}
+              </>
+            ) : null}
+          </>
+        ) : (
+          <div className="product-fallback large">{product.Product_Name}</div>
+        )}
+      </div>
+
+      <div className="product-detail-body">
+        <p className="product-detail-desc">{product.Product_Detail}</p>
+        <p className="muted-link">Stock: {product.stock ?? 1}</p>
+        {error && !showMessage ? <p className="status error">{error}</p> : null}
+        {ok ? <p className="status ok">{ok}</p> : null}
+
+        <div className="product-icon-row" aria-label="Save and share">
+          <button
+            type="button"
+            className={`icon-action${favorited ? ' is-favorited' : ''}`}
+            disabled={busy}
+            onClick={toggleFavorite}
+            aria-pressed={favorited}
+            aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <HeartIcon filled={favorited} />
+            <span>{favorited ? 'Saved' : 'Favorite'}</span>
+          </button>
+          <button
+            type="button"
+            className="icon-action"
+            onClick={share}
+            aria-label="Share product"
+          >
+            <ShareIcon />
+            <span>Share</span>
+          </button>
         </div>
-        <div className="detail-copy">
-          <p className="eyebrow">
-            {product.category || 'Other'}
-            {product.colour && product.colour !== 'Other' ? ` · ${product.colour}` : ''}
-            {average ? ` · ★ ${average}` : ''}
-          </p>
-          <h1>{product.Product_Name}</h1>
-          <p className="detail-price">{formatPrice(product.Price)}</p>
-          <p>{product.Product_Detail}</p>
-          <p className="muted-link">Stock: {product.stock ?? 1}</p>
-          {error && !showMessage ? <p className="status error">{error}</p> : null}
-          {ok ? <p className="status ok">{ok}</p> : null}
-          <div className="detail-actions form-actions">
-            {!sold && !isOwner ? (
-              <button className="btn btn-accent" type="button" disabled={busy} onClick={addCart}>
-                Add to cart
-              </button>
-            ) : null}
-            {!isOwner ? (
-              <button
-                className="btn btn-secondary msg-seller-btn"
-                type="button"
-                disabled={busy}
-                onClick={openMessageSeller}
-              >
-                <span className="msg-seller-icon" aria-hidden="true" />
-                Message seller
-              </button>
-            ) : null}
-            <div className="detail-soft-actions">
-              <button
-                className={`btn btn-secondary${favorited ? ' is-favorited' : ''}`}
-                type="button"
-                disabled={busy}
-                onClick={toggleFavorite}
-                aria-pressed={favorited}
-              >
-                {favorited ? 'Remove favorite' : 'Favorite'}
-              </button>
-              <button className="btn btn-secondary" type="button" onClick={share}>
-                Share
-              </button>
-            </div>
-          </div>
+
+        <div className="product-cta-row">
+          {!isOwner ? (
+            <button
+              type="button"
+              className="btn btn-secondary product-cta"
+              disabled={busy}
+              onClick={openMessageSeller}
+            >
+              <ChatIcon />
+              Message seller
+            </button>
+          ) : null}
+          {!sold && !isOwner ? (
+            <button
+              type="button"
+              className="btn btn-accent product-cta"
+              disabled={busy}
+              onClick={addCart}
+            >
+              <CartIcon />
+              Add to cart
+            </button>
+          ) : null}
+          {isOwner ? (
+            <Link className="btn btn-secondary product-cta" to="/mine">
+              Manage listing
+            </Link>
+          ) : null}
+          {sold && !isOwner ? (
+            <p className="muted-link sold-note">This piece is sold out.</p>
+          ) : null}
         </div>
       </div>
 
@@ -369,7 +496,11 @@ export default function ProductDetailPage() {
                 >
                   Cancel
                 </button>
-                <button className="btn btn-primary" type="submit" disabled={busy || !messageBody.trim()}>
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={busy || !messageBody.trim()}
+                >
                   {busy ? 'Sending…' : 'Send & open chat'}
                 </button>
               </div>
@@ -378,7 +509,7 @@ export default function ProductDetailPage() {
         </div>
       ) : null}
 
-      <div className="reviews">
+      <div className="reviews product-detail-reviews">
         <h2>Reviews</h2>
         {reviews.length === 0 ? <p className="empty">No reviews yet.</p> : null}
         <ul className="review-list">
