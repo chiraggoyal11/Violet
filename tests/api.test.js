@@ -95,7 +95,8 @@ describe('Violet API', () => {
         username: 'TestMaker',
         country_code,
         phone_no: phone,
-        password: validPassword
+        password: validPassword,
+        email: 'maker@example.com'
       })
       .expect(200);
 
@@ -105,6 +106,33 @@ describe('Violet API', () => {
     assert.equal(res.body.user.country_code, country_code);
     assert.equal(res.body.user.phone_no, phone);
     token = res.body.token;
+  });
+
+  it('rejects registration when phone or email already exists', async () => {
+    const samePhone = await request(app)
+      .post('/api/violet/auth/register')
+      .send({
+        username: 'CopyCat',
+        country_code,
+        phone_no: phone,
+        password: validPassword
+      })
+      .expect(409);
+    assert.match(samePhone.body.msg, /already exists/i);
+    assert.match(samePhone.body.msg, /phone/i);
+
+    const sameEmail = await request(app)
+      .post('/api/violet/auth/register')
+      .send({
+        username: 'OtherPerson',
+        country_code,
+        phone_no: `${(Date.now() + 7).toString().slice(-10)}`,
+        password: validPassword,
+        email: 'maker@example.com'
+      })
+      .expect(409);
+    assert.match(sameEmail.body.msg, /already exists/i);
+    assert.match(sameEmail.body.msg, /email/i);
   });
 
   it('rejects product create without auth', async () => {

@@ -99,7 +99,17 @@ export default function RegisterPage() {
           </div>
           <PasswordField value={password} onChange={setPassword} />
           {status ? <p className="status">{status}</p> : null}
-          {error ? <p className="status error">{error}</p> : null}
+          {error ? (
+            <p className="status error" role="alert">
+              {error}
+              {/already exists/i.test(error) ? (
+                <>
+                  {' '}
+                  <Link to="/login">Go to sign in</Link>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           <div className="form-actions">
             <button className="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Creating…' : 'Create account'}
