@@ -1,6 +1,14 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
 
 export default function HomePage() {
+  const { user, booting } = useAuth();
+
+  // Signed-in users stay in the app — don't show the guest marketing landing.
+  if (!booting && user) {
+    return <Navigate to="/catalog" replace />;
+  }
+
   return (
     <section className="hero" aria-label="Violet introduction">
       <div className="hero-media" aria-hidden="true" />

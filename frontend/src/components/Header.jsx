@@ -31,7 +31,7 @@ export default function Header() {
 
   return (
     <header className="site-header">
-      <Link to="/" className="brand-mark">
+      <Link to={user ? '/catalog' : '/'} className="brand-mark">
         Violet
       </Link>
       <nav className="nav-links" aria-label="Primary">
