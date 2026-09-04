@@ -50,7 +50,7 @@ test('catalog product opens detail page', async ({ page, request }) => {
   });
 
   await page.goto('/catalog');
-  await expect(page.getByRole('heading', { name: /catalog/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^home$/i })).toBeVisible();
   const productLink = page.getByRole('link', { name: new RegExp(`view ${productName}`, 'i') }).first();
   await expect(productLink).toBeVisible({ timeout: 10000 });
   await productLink.click();
