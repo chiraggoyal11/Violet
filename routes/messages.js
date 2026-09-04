@@ -6,11 +6,33 @@ const Product = require('../models/product');
 const User = require('../models/user');
 const user_jwt = require('../middleware/user_jwt');
 const { notifyUser } = require('../utils/notifications');
+const { signImageKey } = require('../utils/s3');
+
+async function resolveAvatar(user) {
+  if (!user) return null;
+  const obj = {
+    _id: user._id,
+    username: user.username,
+    avatar: user.avatar || null
+  };
+  const key =
+    user.avatar_key ||
+    (!/^https?:\/\//i.test(String(user.avatar || '')) ? user.avatar : null);
+  if (key && !/^https?:\/\//i.test(String(key))) {
+    try {
+      const signed = await signImageKey(key);
+      if (signed) obj.avatar = signed;
+    } catch {
+      /* keep stored avatar */
+    }
+  }
+  return obj;
+}
 
 async function hydrateConversation(conv, currentUserId) {
   const otherId = conv.participants.find((p) => String(p) !== String(currentUserId));
   const [other, unread] = await Promise.all([
-    otherId ? User.findById(otherId).select('username avatar') : null,
+    otherId ? User.findById(otherId).select('username avatar avatar_key') : null,
     Message.countDocuments({
       conversation_id: conv._id,
       sender_id: { $ne: String(currentUserId) },
@@ -19,9 +41,7 @@ async function hydrateConversation(conv, currentUserId) {
   ]);
   return {
     ...conv.toObject(),
-    otherUser: other
-      ? { _id: other._id, username: other.username, avatar: other.avatar }
-      : null,
+    otherUser: await resolveAvatar(other),
     unread
   };
 }
