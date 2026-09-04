@@ -12,7 +12,7 @@ function Icon({ children }) {
 const guestLinks = [
   {
     to: '/catalog',
-    label: 'Catalog',
+    label: 'Home',
     icon: (
       <Icon>
         <path
@@ -48,12 +48,12 @@ const guestLinks = [
 const userLinks = [
   {
     to: '/catalog',
-    label: 'Catalog',
+    label: 'Home',
     icon: (
       <Icon>
         <path
           fill="currentColor"
-          d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z"
+          d="M12 3 2 12h3v8h6v-5h2v5h6v-8h3L12 3Z"
         />
       </Icon>
     ),

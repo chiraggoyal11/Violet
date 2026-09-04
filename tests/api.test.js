@@ -183,11 +183,42 @@ describe('Violet API', () => {
     assert.ok(Array.isArray(res.body.product));
     assert.ok(res.body.total >= 1);
     assert.ok(res.body.totalPages >= 1);
+    assert.ok(Array.isArray(res.body.colours));
     const withImage = res.body.product.find((p) => p._id === productId);
     assert.ok(withImage);
     assert.ok(withImage.ImageUrls?.length >= 1 || withImage.ImageUrl);
     const url = withImage.ImageUrls?.[0] || withImage.ImageUrl;
     assert.match(url, /^https?:\/\//);
+  });
+
+  it('filters by colour and sorts by popular', async () => {
+    const coloured = await request(app)
+      .post('/api/violet/products')
+      .set('Authorization', `Bearer ${token}`)
+      .field('Product_Name', 'Blue Scarf')
+      .field('Product_Detail', 'Soft indigo weave')
+      .field('Price', '22.00')
+      .field('category', 'Fashion')
+      .field('colour', 'Blue')
+      .expect(200);
+
+    const blueId = coloured.body.product._id;
+    await request(app)
+      .post(`/api/violet/favorites/${blueId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const filtered = await request(app)
+      .get('/api/violet/products?colour=Blue&status=active')
+      .expect(200);
+    assert.ok(filtered.body.product.some((p) => p._id === blueId));
+    assert.ok(filtered.body.product.every((p) => p.colour === 'Blue'));
+
+    const popular = await request(app)
+      .get('/api/violet/products?sort=popular&limit=12')
+      .expect(200);
+    assert.equal(popular.body.success, true);
+    assert.ok(popular.body.product.some((p) => p._id === blueId));
   });
 
   it('returns product detail with image gallery URLs', async () => {
@@ -254,6 +285,22 @@ describe('Violet API', () => {
     assert.equal(settings.body.user.settings.showPhoneToBuyers, true);
     assert.equal(settings.body.user.settings.preferredCurrency, 'USD');
     assert.equal(settings.body.user.settings.defaultCheckoutNote, 'Leave at the lobby');
+  });
+
+  it('uploads a profile photo', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const res = await request(app)
+      .put('/api/violet/auth/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('avatar', png, { filename: 'face.png', contentType: 'image/png' })
+      .expect(200);
+
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.user.avatar_key || res.body.user.avatar);
+    assert.match(String(res.body.user.avatar), /^https?:\/\//);
   });
 
   it('resets password with OTP', async () => {

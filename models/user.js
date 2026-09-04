@@ -68,6 +68,10 @@ const userSchema = new mongoose.Schema({
     avatar: {
         type: String
     },
+    avatar_key: {
+        type: String,
+        trim: true
+    },
     auth_provider: {
         type: String,
         enum: ['local', 'google'],

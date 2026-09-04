@@ -1,34 +1,39 @@
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { api } from '../api';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 
 const PAGE_SIZE = 12;
 const SORTS = [
   { value: 'newest', label: 'Newest' },
+  { value: 'popular', label: 'Popular' },
   { value: 'oldest', label: 'Oldest' },
-  { value: 'price_asc', label: 'Price ↑' },
-  { value: 'price_desc', label: 'Price ↓' },
+  { value: 'price_asc', label: 'Price: low to high' },
+  { value: 'price_desc', label: 'Price: high to low' },
 ];
+
+const emptyDraft = {
+  category: '',
+  colour: '',
+  minPrice: '',
+  maxPrice: '',
+  status: 'active',
+};
 
 export default function CatalogPage() {
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('');
-  const [minPrice, setMinPrice] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
+  const [draft, setDraft] = useState(emptyDraft);
   const [sort, setSort] = useState('newest');
-  const [status, setStatus] = useState('active');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
     name: '',
-    category: '',
-    minPrice: '',
-    maxPrice: '',
+    ...emptyDraft,
     sort: 'newest',
-    status: 'active',
   });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState([]);
+  const [colours, setColours] = useState([]);
   const [products, setProducts] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,6 +56,7 @@ export default function CatalogPage() {
           setTotalPages(data.totalPages || 1);
           setTotal(data.total || 0);
           if (data.categories) setCategories(data.categories);
+          if (data.colours) setColours(data.colours);
         });
       } catch (err) {
         if (!cancelled) {
@@ -66,86 +72,221 @@ export default function CatalogPage() {
     };
   }, [filters, page]);
 
-  function applyFilters(e) {
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filters.category) n += 1;
+    if (filters.colour) n += 1;
+    if (filters.minPrice !== '') n += 1;
+    if (filters.maxPrice !== '') n += 1;
+    if (filters.status && filters.status !== 'active') n += 1;
+    return n;
+  }, [filters]);
+
+  function applySearch(e) {
     e.preventDefault();
     setPage(1);
-    setFilters({
+    setFilters((prev) => ({ ...prev, name: query.trim() }));
+  }
+
+  function applyPanelFilters(e) {
+    e.preventDefault();
+    setPage(1);
+    setFilters((prev) => ({
+      ...prev,
       name: query.trim(),
-      category,
-      minPrice,
-      maxPrice,
-      sort,
-      status,
+      category: draft.category,
+      colour: draft.colour,
+      minPrice: draft.minPrice,
+      maxPrice: draft.maxPrice,
+      status: draft.status,
+    }));
+    setFiltersOpen(false);
+  }
+
+  function clearPanelFilters() {
+    setDraft(emptyDraft);
+    setPage(1);
+    setFilters((prev) => ({
+      ...prev,
+      category: '',
+      colour: '',
+      minPrice: '',
+      maxPrice: '',
+      status: 'active',
+    }));
+    setFiltersOpen(false);
+  }
+
+  function onSortChange(value) {
+    setSort(value);
+    setPage(1);
+    setFilters((prev) => ({ ...prev, sort: value }));
+  }
+
+  function openFilters() {
+    setDraft({
+      category: filters.category || '',
+      colour: filters.colour || '',
+      minPrice: filters.minPrice || '',
+      maxPrice: filters.maxPrice || '',
+      status: filters.status || 'active',
     });
+    setFiltersOpen(true);
   }
 
   return (
     <section className="section">
       <div className="section-heading">
         <div>
-          <h2>Catalog</h2>
-          <p>Search, filter, and sort handmade listings on Violet.</p>
+          <h2>Home</h2>
+          <p>Browse handmade listings — search, filter, and sort what you love.</p>
         </div>
       </div>
 
-      <form className="filters" onSubmit={applyFilters}>
-        <input
-          type="search"
-          placeholder="Search products"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search products"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Category"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="Min $"
-          value={minPrice}
-          onChange={(e) => setMinPrice(e.target.value)}
-          aria-label="Minimum price"
-        />
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="Max $"
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value)}
-          aria-label="Maximum price"
-        />
-        <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          aria-label="Availability"
-        >
-          <option value="active">Available</option>
-          <option value="sold">Sold</option>
-          <option value="">All</option>
-        </select>
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          Apply
-        </button>
-      </form>
+      <div className="home-toolbar">
+        <form className="home-search" onSubmit={applySearch}>
+          <input
+            type="search"
+            placeholder="Search products"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search products"
+          />
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            Search
+          </button>
+        </form>
+
+        <div className="home-toolbar-actions">
+          <button
+            type="button"
+            className={`btn btn-secondary filter-trigger${activeFilterCount ? ' has-filters' : ''}`}
+            onClick={openFilters}
+            aria-expanded={filtersOpen}
+          >
+            Filters
+            {activeFilterCount ? (
+              <span className="filter-count">{activeFilterCount}</span>
+            ) : null}
+          </button>
+          <label className="sort-control">
+            <span className="visually-hidden">Sort</span>
+            <select
+              value={sort}
+              onChange={(e) => onSortChange(e.target.value)}
+              aria-label="Sort products"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  Sort: {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {filtersOpen ? (
+        <div className="filter-overlay" role="presentation" onClick={() => setFiltersOpen(false)}>
+          <div
+            className="filter-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filter-panel-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="filter-panel-head">
+              <h3 id="filter-panel-title">Filters</h3>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Close filters"
+                onClick={() => setFiltersOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form className="filter-panel-form" onSubmit={applyPanelFilters}>
+              <div className="form-field">
+                <label htmlFor="filter-category">Category</label>
+                <select
+                  id="filter-category"
+                  value={draft.category}
+                  onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-field">
+                <label htmlFor="filter-colour">Colour</label>
+                <select
+                  id="filter-colour"
+                  value={draft.colour}
+                  onChange={(e) => setDraft((d) => ({ ...d, colour: e.target.value }))}
+                >
+                  <option value="">All colours</option>
+                  {colours.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-grid">
+                <div className="form-field">
+                  <label htmlFor="filter-min">Min price</label>
+                  <input
+                    id="filter-min"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={draft.minPrice}
+                    onChange={(e) => setDraft((d) => ({ ...d, minPrice: e.target.value }))}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="filter-max">Max price</label>
+                  <input
+                    id="filter-max"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Any"
+                    value={draft.maxPrice}
+                    onChange={(e) => setDraft((d) => ({ ...d, maxPrice: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="form-field">
+                <label htmlFor="filter-status">Availability</label>
+                <select
+                  id="filter-status"
+                  value={draft.status}
+                  onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value }))}
+                >
+                  <option value="active">Available</option>
+                  <option value="sold">Sold</option>
+                  <option value="">All</option>
+                </select>
+              </div>
+              <div className="filter-panel-actions">
+                <button type="button" className="btn btn-secondary" onClick={clearPanelFilters}>
+                  Clear
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Apply filters
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="status error">{error}</p> : null}
 

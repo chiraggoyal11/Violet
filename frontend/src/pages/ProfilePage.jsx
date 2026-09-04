@@ -28,12 +28,15 @@ function fromUser(user) {
 export default function ProfilePage() {
   const { user, token, booting, setUserSession } = useAuth();
   const [form, setForm] = useState(fromUser(user));
+  const [preview, setPreview] = useState(user?.avatar || '');
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   useEffect(() => {
     setForm(fromUser(user));
+    setPreview(user?.avatar || '');
   }, [user]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
@@ -48,6 +51,29 @@ export default function ProfilePage() {
       ...prev,
       address: { ...prev.address, [key]: value },
     }));
+  }
+
+  async function onPhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoBusy(true);
+    setError('');
+    setOk('');
+    try {
+      const localUrl = URL.createObjectURL(file);
+      setPreview(localUrl);
+      const data = await api.updateAvatar(file, token);
+      if (!data.success) throw new Error(data.msg || 'Photo upload failed');
+      setUserSession(token, data.user);
+      setPreview(data.user.avatar || localUrl);
+      setOk('Profile photo updated.');
+    } catch (err) {
+      setPreview(user?.avatar || '');
+      setError(err.message || 'Photo upload failed');
+    } finally {
+      setPhotoBusy(false);
+      e.target.value = '';
+    }
   }
 
   async function onSubmit(e) {
@@ -88,6 +114,32 @@ export default function ProfilePage() {
             : `Phone ${formatPhoneDisplay(user)} is used to sign in and cannot be changed here.`}
         </p>
         <form className="form profile-form" onSubmit={onSubmit}>
+          <fieldset className="form-section">
+            <legend>Photo</legend>
+            <div className="profile-photo-row">
+              <div className="profile-photo-preview" aria-hidden="true">
+                {preview ? (
+                  <img src={preview} alt="" />
+                ) : (
+                  <span>{(form.username || '?').slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="avatar">Profile photo</label>
+                <input
+                  id="avatar"
+                  type="file"
+                  accept="image/*"
+                  onChange={onPhotoChange}
+                  disabled={photoBusy}
+                />
+                <p className="muted-link">
+                  {photoBusy ? 'Uploading…' : 'JPG or PNG, cropped square works best.'}
+                </p>
+              </div>
+            </div>
+          </fieldset>
+
           <fieldset className="form-section">
             <legend>Account</legend>
             <div className="form-grid">
@@ -224,7 +276,7 @@ export default function ProfilePage() {
           {error ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
           <div className="form-actions">
-            <button className="btn btn-primary" type="submit" disabled={busy}>
+            <button className="btn btn-primary" type="submit" disabled={busy || photoBusy}>
               {busy ? 'Saving…' : 'Save profile'}
             </button>
           </div>

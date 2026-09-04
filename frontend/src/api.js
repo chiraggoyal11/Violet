@@ -153,6 +153,17 @@ export const api = {
     request(AUTH_BASE, '/profile', { method: 'PUT', body: payload, token }),
   updateSettings: (payload, token) =>
     request(AUTH_BASE, '/settings', { method: 'PUT', body: payload, token }),
+  updateAvatar: async (file, token) => {
+    const compressed = await compressImage(file, { maxEdge: 800, quality: 0.85 });
+    const form = new FormData();
+    form.append('avatar', compressed);
+    return request(AUTH_BASE, '/avatar', {
+      method: 'PUT',
+      body: form,
+      formData: true,
+      token,
+    });
+  },
 
   listProducts: (opts = {}) => {
     const params = new URLSearchParams();
@@ -164,12 +175,13 @@ export const api = {
   getProduct: (id) => request(PRODUCT_BASE, `/detail/${id}`),
   listMyProducts: (userId) => request(PRODUCT_BASE, `/user/${userId}`),
   sellerStats: (token) => request(PRODUCT_BASE, '/seller/stats', { token }),
-  addProduct: async ({ token, name, detail, price, category, stock, imageFiles = [] }) => {
+  addProduct: async ({ token, name, detail, price, category, colour, stock, imageFiles = [] }) => {
     const form = new FormData();
     form.append('Product_Name', name);
     form.append('Product_Detail', detail);
     form.append('Price', price);
     if (category) form.append('category', category);
+    if (colour) form.append('colour', colour);
     if (stock !== undefined) form.append('stock', String(stock));
     for (const file of imageFiles) {
       const compressed = await compressImage(file);

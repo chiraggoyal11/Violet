@@ -4,15 +4,26 @@ const User = require('../models/user');
 const bcryptjs = require('bcryptjs');
 const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const { createPasswordOtp, verifyPasswordOtp, shouldReturnOtpInResponse } = require('../utils/otp');
 const { googleConfigured, verifyGoogleCredential } = require('../utils/googleAuth');
 const { requireMongo, mongoFailure } = require('../utils/mongo');
+const {
+    uploadProductImage,
+    signImageKey,
+    deleteProductImage
+} = require('../utils/s3');
 
 const {
     validatePassword,
     parsePhoneFields,
     phoneLookupKey
 } = require('../utils/authValidation');
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 async function findUserByPhone(country_code, phone_no) {
     const parsed = parsePhoneFields({ country_code, phone_no });
@@ -117,6 +128,21 @@ function publicUser(user) {
     return obj;
 }
 
+async function publicUserWithAvatar(user) {
+    const obj = publicUser(user);
+    if (!obj) return null;
+    const key = obj.avatar_key || (!/^https?:\/\//i.test(String(obj.avatar || '')) ? obj.avatar : null);
+    if (key && !/^https?:\/\//i.test(String(key))) {
+        try {
+            const signed = await signImageKey(key);
+            if (signed) obj.avatar = signed;
+        } catch {
+            /* keep existing avatar */
+        }
+    }
+    return obj;
+}
+
 function signToken(userId) {
     return new Promise((resolve, reject) => {
         jwt.sign(
@@ -157,7 +183,7 @@ router.post('/google', async (req, res) => {
                     });
                 }
                 user.google_id = profile.google_id;
-                if (profile.avatar) user.avatar = profile.avatar;
+                if (profile.avatar && !user.avatar_key) user.avatar = profile.avatar;
                 await user.save();
             }
         }
@@ -171,7 +197,7 @@ router.post('/google', async (req, res) => {
                 avatar: profile.avatar
             });
         } else {
-            if (profile.avatar) user.avatar = profile.avatar;
+            if (profile.avatar && !user.avatar_key) user.avatar = profile.avatar;
             // Do not overwrite an existing display name on every Google sign-in.
             await user.save();
         }
@@ -180,7 +206,7 @@ router.post('/google', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);
@@ -194,7 +220,7 @@ router.get('/', user_jwt, async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, msg: 'User not found' });
         }
-        return res.status(200).json({ success: true, user });
+        return res.status(200).json({ success: true, user: await publicUserWithAvatar(user) });
     } catch (error) {
         console.log(error);
         return mongoFailure(res, error, 'Server error');
@@ -256,11 +282,57 @@ router.put('/profile', user_jwt, async (req, res) => {
         return res.status(200).json({
             success: true,
             msg: 'Profile updated',
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);
         return mongoFailure(res, error, 'Failed to update profile');
+    }
+});
+
+
+router.put('/avatar', user_jwt, upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, msg: 'Profile photo is required' });
+        }
+        if (!String(req.file.mimetype || '').startsWith('image/')) {
+            return res.status(400).json({ success: false, msg: 'File must be an image' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, msg: 'User not found' });
+        }
+
+        const previousKey = user.avatar_key;
+        let key;
+        try {
+            key = await uploadProductImage(req.file);
+        } catch (error) {
+            return res.status(error.status || 500).json({
+                success: false,
+                msg: error.message || 'Photo upload failed'
+            });
+        }
+
+        user.avatar_key = key;
+        const signed = await signImageKey(key);
+        user.avatar = signed || key;
+        await user.save();
+
+        if (previousKey && previousKey !== key) {
+            deleteProductImage(previousKey).catch(() => {});
+        }
+
+        return res.status(200).json({
+            success: true,
+            msg: 'Profile photo updated',
+            user: await publicUserWithAvatar(user)
+        });
+    } catch (error) {
+        console.log(error);
+        return mongoFailure(res, error, 'Failed to update profile photo');
     }
 });
 
@@ -282,7 +354,7 @@ router.put('/settings', user_jwt, async (req, res) => {
         return res.status(200).json({
             success: true,
             msg: 'Settings updated',
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);
@@ -354,7 +426,7 @@ router.post('/register', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (err) {
         console.log(err);
@@ -414,7 +486,7 @@ router.post('/login', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);

@@ -21,7 +21,7 @@ export default function HomePage() {
         </p>
         <div className="hero-actions">
           <Link className="btn btn-primary" to="/catalog">
-            Browse catalog
+            Browse Home
           </Link>
           <Link className="btn btn-secondary" to="/sell">
             Start selling
