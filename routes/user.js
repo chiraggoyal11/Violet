@@ -187,15 +187,25 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ success: false, msg: 'Invalid email address' });
         }
 
-        const user_exist = await User.findOne({
+        const phoneTaken = await User.findOne({
             country_code: phone.country_code,
             phone_no: phone.phone_no
         });
-        if (user_exist) {
+        if (phoneTaken) {
             return res.status(409).json({
                 success: false,
-                msg: 'user already exist'
+                msg: 'User already exists with this phone number. Please sign in.'
             });
+        }
+
+        if (email) {
+            const emailTaken = await User.findOne({ email });
+            if (emailTaken) {
+                return res.status(409).json({
+                    success: false,
+                    msg: 'User already exists with this email. Please sign in.'
+                });
+            }
         }
 
         const user = new User({
@@ -219,10 +229,14 @@ router.post('/register', async (req, res) => {
     } catch (err) {
         console.log(err);
         if (err.code === 11000) {
-            return res.status(409).json({
-                success: false,
-                msg: 'user already exist'
-            });
+            const key = Object.keys(err.keyPattern || {})[0] || '';
+            const msg =
+                key === 'email'
+                    ? 'User already exists with this email. Please sign in.'
+                    : key === 'phone_no' || key === 'country_code'
+                      ? 'User already exists with this phone number. Please sign in.'
+                      : 'User already exists. Please sign in.';
+            return res.status(409).json({ success: false, msg });
         }
         return mongoFailure(res, err, 'Registration failed');
     }
