@@ -18,7 +18,7 @@ test('register, browse catalog, and open password reset', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/sell/);
   await page.goto('/catalog');
-  await expect(page.getByRole('heading', { name: /catalog/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^home$/i })).toBeVisible();
 
   await page.goto('/forgot-password');
   await page.getByLabel('Country code').selectOption('+91');
