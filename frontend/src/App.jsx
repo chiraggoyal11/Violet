@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { AuthProvider } from './AuthContext';
+import { AuthProvider, useAuth } from './AuthContext';
 import Header from './components/Header';
 import CartPage from './pages/CartPage';
 import CatalogPage from './pages/CatalogPage';
@@ -21,11 +21,14 @@ import RequireAuth from './components/RequireAuth';
 
 function Shell() {
   const location = useLocation();
+  const { user, booting } = useAuth();
   const isHome = location.pathname === '/';
+  // Keep marketing landing chrome-free for guests; signed-in users keep the app header.
+  const showChrome = !isHome || Boolean(user);
 
   return (
-    <div className="app-shell">
-      {!isHome ? <Header /> : null}
+    <div className={`app-shell${isHome && !user ? ' app-shell-home' : ''}`}>
+      {showChrome && !booting ? <Header /> : null}
       <main className="main">
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -118,7 +121,7 @@ function Shell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-      {!isHome ? (
+      {showChrome && !booting ? (
         <footer className="site-footer">Violet · handmade goods marketplace</footer>
       ) : null}
     </div>
