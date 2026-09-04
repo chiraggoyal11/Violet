@@ -63,6 +63,7 @@ export default function RegisterPage() {
   return (
     <div className="auth-layout">
       <div className="panel">
+        <p className="auth-brand">Violet</p>
         <h1>Join Violet</h1>
         <p className="lede">Continue with Google or create a seller profile with phone and password.</p>
         <GoogleSignInButton

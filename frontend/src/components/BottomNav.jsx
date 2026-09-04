@@ -12,7 +12,7 @@ function Icon({ children }) {
 const guestLinks = [
   {
     to: '/catalog',
-    label: 'Home',
+    label: 'Shop',
     icon: (
       <Icon>
         <path
@@ -48,7 +48,7 @@ const guestLinks = [
 const userLinks = [
   {
     to: '/catalog',
-    label: 'Home',
+    label: 'Shop',
     icon: (
       <Icon>
         <path

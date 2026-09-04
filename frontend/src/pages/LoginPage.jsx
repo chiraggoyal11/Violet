@@ -59,6 +59,7 @@ export default function LoginPage() {
   return (
     <div className="auth-layout">
       <div className="panel">
+        <p className="auth-brand">Violet</p>
         <h1>Welcome back</h1>
         <p className="lede">Sign in with Google or the phone number on your Violet account.</p>
         <GoogleSignInButton

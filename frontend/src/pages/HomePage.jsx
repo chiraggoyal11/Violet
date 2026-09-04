@@ -20,13 +20,10 @@ export default function HomePage() {
           the catalog, and keep your shop in one place.
         </p>
         <div className="hero-actions">
-          <Link className="btn btn-primary" to="/catalog">
-            Browse Home
+          <Link className="btn btn-accent" to="/catalog">
+            Browse shop
           </Link>
-          <Link className="btn btn-secondary" to="/sell">
-            Start selling
-          </Link>
-          <Link className="btn btn-secondary" to="/login">
+          <Link className="btn btn-secondary hero-secondary" to="/login">
             Sign in
           </Link>
         </div>

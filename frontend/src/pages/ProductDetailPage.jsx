@@ -227,7 +227,7 @@ export default function ProductDetailPage() {
           <p className="muted-link">Stock: {product.stock ?? 1}</p>
           {error && !showMessage ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
-          <div className="form-actions">
+          <div className="detail-actions form-actions">
             {!sold && !isOwner ? (
               <button className="btn btn-accent" type="button" disabled={busy} onClick={addCart}>
                 Add to cart
@@ -244,12 +244,14 @@ export default function ProductDetailPage() {
                 Message seller
               </button>
             ) : null}
-            <button className="btn btn-secondary" type="button" disabled={busy} onClick={toggleFavorite}>
-              Favorite
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={share}>
-              Share
-            </button>
+            <div className="detail-soft-actions">
+              <button className="btn btn-secondary" type="button" disabled={busy} onClick={toggleFavorite}>
+                Favorite
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={share}>
+                Share
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { clearNotificationBadge } from '../components/Header';
+import EmptyState from '../components/EmptyState';
 
 export default function NotificationsPage() {
   const { user, token, booting } = useAuth();
@@ -37,12 +38,18 @@ export default function NotificationsPage() {
 
   return (
     <section className="section">
-      <div className="panel wide">
-        <h1>Notifications</h1>
+      <div className="section-heading">
+        <div>
+          <p className="section-kicker">Alerts</p>
+          <h2>Notifications</h2>
+          <p>Orders, messages, and marketplace updates.</p>
+        </div>
+      </div>
+      <div className="notification-shell">
         {loading ? <p className="empty">Loading…</p> : null}
         {error ? <p className="status error">{error}</p> : null}
         {!loading && notifications.length === 0 ? (
-          <p className="empty">You are all caught up.</p>
+          <EmptyState title="You are all caught up" body="New alerts will appear here." />
         ) : (
           <ul className="notification-list">
             {notifications.map((n) => (
@@ -55,7 +62,7 @@ export default function NotificationsPage() {
                   </time>
                 </div>
                 {n.link ? (
-                  <Link className="btn btn-secondary" to={n.link}>
+                  <Link className="btn btn-secondary btn-compact" to={n.link}>
                     Open
                   </Link>
                 ) : null}
