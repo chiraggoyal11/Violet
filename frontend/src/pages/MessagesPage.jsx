@@ -30,15 +30,39 @@ function formatTime(value) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function formatMessageTime(value) {
+function formatMessageClock(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString([], {
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function dayKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function dayLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (sameDay) return 'Today';
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+  if (isYesterday) return 'Yesterday';
+  return date.toLocaleDateString([], {
+    weekday: 'short',
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
   });
 }
 
@@ -52,6 +76,17 @@ function Avatar({ user, size = 'md' }) {
         <span>{initials(name)}</span>
       )}
     </div>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M3.4 20.6 21 12 3.4 3.4l.1 6.7L15 12l-11.5 1.9.0 6.7Z"
+      />
+    </svg>
   );
 }
 
@@ -118,6 +153,13 @@ export default function MessagesPage() {
     if (id && inputRef.current) inputRef.current.focus();
   }, [id]);
 
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), 140)}px`;
+  }, [body, id]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return conversations;
@@ -126,6 +168,25 @@ export default function MessagesPage() {
       return hay.includes(q);
     });
   }, [conversations, query]);
+
+  const unreadTotal = useMemo(
+    () => conversations.reduce((sum, c) => sum + (c.unread || 0), 0),
+    [conversations],
+  );
+
+  const timeline = useMemo(() => {
+    const items = [];
+    let lastDay = '';
+    for (const m of messages) {
+      const key = dayKey(m.createdAt || m._id);
+      if (key && key !== lastDay) {
+        items.push({ type: 'day', id: `day-${key}`, label: dayLabel(m.createdAt || m._id) });
+        lastDay = key;
+      }
+      items.push({ type: 'message', id: m._id, message: m });
+    }
+    return items;
+  }, [messages]);
 
   async function send(e) {
     e.preventDefault();
@@ -175,21 +236,33 @@ export default function MessagesPage() {
       <aside className="messages-inbox" aria-label="Conversations">
         <div className="messages-inbox-head">
           <div>
+            <p className="messages-kicker">Inbox</p>
             <h1>Messages</h1>
-            <p>Chat with buyers and sellers about listings.</p>
+            <p>
+              {conversations.length
+                ? `${conversations.length} conversation${conversations.length === 1 ? '' : 's'}${
+                    unreadTotal ? ` · ${unreadTotal} unread` : ''
+                  }`
+                : 'Chat with buyers and sellers about listings.'}
+            </p>
           </div>
         </div>
         <div className="messages-search">
+          <span className="messages-search-icon" aria-hidden="true" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search chats"
+            placeholder="Search people or listings"
             aria-label="Search chats"
           />
         </div>
         {filtered.length === 0 ? (
           <div className="messages-empty">
+            <div className="messages-illus" aria-hidden="true">
+              <span />
+              <span />
+            </div>
             <strong>No chats yet</strong>
             <p>Open a product and tap Message seller to start a conversation.</p>
             <Link className="btn btn-secondary" to="/catalog">
@@ -198,15 +271,18 @@ export default function MessagesPage() {
           </div>
         ) : (
           <ul className="conversation-list">
-            {filtered.map((c) => {
+            {filtered.map((c, index) => {
               const activeItem = String(c._id) === String(id);
               return (
-                <li key={c._id}>
+                <li key={c._id} style={{ '--i': index }}>
                   <Link
                     className={`conversation-item${activeItem ? ' active' : ''}${c.unread ? ' unread' : ''}`}
                     to={`/messages/${c._id}`}
                   >
-                    <Avatar user={c.otherUser} />
+                    <div className="conversation-avatar-wrap">
+                      <Avatar user={c.otherUser} />
+                      {c.unread ? <span className="presence-dot" aria-hidden="true" /> : null}
+                    </div>
                     <div className="conversation-copy">
                       <div className="conversation-top">
                         <strong>{c.otherUser?.username || 'User'}</strong>
@@ -229,12 +305,20 @@ export default function MessagesPage() {
       <div className="messages-thread" aria-live="polite">
         {!id ? (
           <div className="messages-empty thread-empty">
-            <div className="thread-empty-mark" aria-hidden="true" />
-            <strong>Your inbox</strong>
-            <p>Pick a conversation or message a seller from any listing.</p>
+            <div className="messages-illus large" aria-hidden="true">
+              <span />
+              <span />
+            </div>
+            <strong>Select a conversation</strong>
+            <p>Your chats live here — pick one from the left, or message a seller from any listing.</p>
           </div>
         ) : loading ? (
           <div className="messages-empty">
+            <div className="chat-loading" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
             <p>Loading conversation…</p>
           </div>
         ) : (
@@ -248,15 +332,16 @@ export default function MessagesPage() {
               >
                 ←
               </button>
-              <Avatar user={active?.otherUser} />
+              <Avatar user={active?.otherUser} size="md" />
               <div className="thread-header-copy">
                 <h2>{active?.otherUser?.username || 'Conversation'}</h2>
                 {active?.product_id ? (
                   <Link className="thread-product-chip" to={`/product/${active.product_id}`}>
-                    About: {active.product_name || 'Listing'}
+                    <span className="chip-dot" aria-hidden="true" />
+                    {active.product_name || 'Listing'}
                   </Link>
                 ) : (
-                  <span className="muted-link">Direct chat</span>
+                  <span className="thread-status">Direct chat</span>
                 )}
               </div>
             </header>
@@ -264,20 +349,36 @@ export default function MessagesPage() {
             {error ? <p className="status error thread-error">{error}</p> : null}
 
             <div className="message-list" ref={listRef}>
-              {messages.length === 0 ? (
+              {timeline.length === 0 ? (
                 <div className="messages-empty inline-empty">
-                  <p>Say hello — ask about shipping, fit, or customization.</p>
+                  <div className="messages-illus" aria-hidden="true">
+                    <span />
+                    <span />
+                  </div>
+                  <strong>Start the conversation</strong>
+                  <p>Ask about shipping, fit, materials, or customization.</p>
                 </div>
               ) : (
-                messages.map((m) => {
+                timeline.map((item) => {
+                  if (item.type === 'day') {
+                    return (
+                      <div key={item.id} className="day-separator">
+                        <span>{item.label}</span>
+                      </div>
+                    );
+                  }
+                  const m = item.message;
                   const mine = String(m.sender_id) === String(user._id);
                   return (
                     <div
-                      key={m._id}
-                      className={`message-bubble${mine ? ' mine' : ' theirs'}`}
+                      key={item.id}
+                      className={`message-row${mine ? ' mine' : ' theirs'}`}
                     >
-                      <p>{m.body}</p>
-                      <time>{formatMessageTime(m.createdAt || m._id)}</time>
+                      {!mine ? <Avatar user={active?.otherUser} size="sm" /> : null}
+                      <div className={`message-bubble${mine ? ' mine' : ' theirs'}`}>
+                        <p>{m.body}</p>
+                        <time>{formatMessageClock(m.createdAt || m._id)}</time>
+                      </div>
                     </div>
                   );
                 })
@@ -286,23 +387,26 @@ export default function MessagesPage() {
 
             {active ? (
               <form className="message-composer" onSubmit={send}>
-                <textarea
-                  ref={inputRef}
-                  rows={1}
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  onKeyDown={onComposerKeyDown}
-                  placeholder="Write a message…"
-                  required
-                />
-                <button
-                  className="btn btn-accent composer-send"
-                  type="submit"
-                  disabled={busy || !body.trim()}
-                  aria-label="Send message"
-                >
-                  {busy ? '…' : 'Send'}
-                </button>
+                <div className="composer-shell">
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    onKeyDown={onComposerKeyDown}
+                    placeholder="Write a message…"
+                    required
+                  />
+                  <button
+                    className="composer-send"
+                    type="submit"
+                    disabled={busy || !body.trim()}
+                    aria-label="Send message"
+                  >
+                    {busy ? <span className="composer-spin" /> : <SendIcon />}
+                  </button>
+                </div>
+                <p className="composer-hint">Enter to send · Shift+Enter for a new line</p>
               </form>
             ) : null}
           </>

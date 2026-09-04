@@ -235,11 +235,12 @@ export default function ProductDetailPage() {
             ) : null}
             {!isOwner ? (
               <button
-                className="btn btn-secondary"
+                className="btn btn-secondary msg-seller-btn"
                 type="button"
                 disabled={busy}
                 onClick={openMessageSeller}
               >
+                <span className="msg-seller-icon" aria-hidden="true" />
                 Message seller
               </button>
             ) : null}
@@ -268,8 +269,11 @@ export default function ProductDetailPage() {
           >
             <div className="msg-modal-head">
               <div>
-                <p className="eyebrow">Chat with seller</p>
-                <h2 id={dialogTitleId}>Message about this listing</h2>
+                <p className="eyebrow">Private chat</p>
+                <h2 id={dialogTitleId}>Ask the maker</h2>
+                <p className="msg-modal-lede">
+                  Shipping, materials, customization — start a conversation about this piece.
+                </p>
               </div>
               <button
                 type="button"
@@ -285,7 +289,10 @@ export default function ProductDetailPage() {
               {thumb ? <img src={thumb} alt="" /> : <div className="msg-modal-fallback" />}
               <div>
                 <strong>{product.Product_Name}</strong>
-                <span>{formatPrice(product.Price)}</span>
+                <span>
+                  {formatPrice(product.Price)}
+                  {product.category ? ` · ${product.category}` : ''}
+                </span>
               </div>
             </div>
 
@@ -294,7 +301,7 @@ export default function ProductDetailPage() {
                 <button
                   key={prompt}
                   type="button"
-                  className="msg-chip"
+                  className={`msg-chip${messageBody === prompt ? ' active' : ''}`}
                   onClick={() => setMessageBody(prompt)}
                 >
                   {prompt}
@@ -306,15 +313,17 @@ export default function ProductDetailPage() {
               <label className="visually-hidden" htmlFor="seller-message">
                 Your message
               </label>
-              <textarea
-                id="seller-message"
-                rows={4}
-                value={messageBody}
-                onChange={(e) => setMessageBody(e.target.value)}
-                placeholder="Ask about shipping, customization, or availability…"
-                required
-                autoFocus
-              />
+              <div className="msg-modal-compose">
+                <textarea
+                  id="seller-message"
+                  rows={4}
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                  placeholder="Ask about shipping, customization, or availability…"
+                  required
+                  autoFocus
+                />
+              </div>
               {error ? <p className="status error">{error}</p> : null}
               <div className="msg-modal-actions">
                 <button
