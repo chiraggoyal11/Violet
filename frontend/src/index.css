@@ -2426,3 +2426,17 @@ img {
 .notification-list li.unread strong {
   color: var(--brand);
 }
+
+.favorite-item {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.favorite-remove {
+  width: 100%;
+}
+
+.btn.is-favorited {
+  background: rgba(61, 42, 79, 0.1);
+  border-color: rgba(61, 42, 79, 0.45);
+}

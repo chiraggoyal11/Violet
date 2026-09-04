@@ -27,6 +27,7 @@ export default function ProductDetailPage() {
   const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [favorited, setFavorited] = useState(false);
 
   const gallery =
     product?.ImageUrls?.length > 0
@@ -58,6 +59,25 @@ export default function ProductDetailPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!token || !id) {
+      setFavorited(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.favoriteStatus(id, token);
+        if (!cancelled) setFavorited(Boolean(data.favorited));
+      } catch {
+        if (!cancelled) setFavorited(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, id]);
 
   useEffect(() => {
     if (!showMessage) return undefined;
@@ -92,11 +112,19 @@ export default function ProductDetailPage() {
     if (!token) return navigate('/login');
     setBusy(true);
     setError('');
+    setOk('');
     try {
-      await api.addFavorite(id, token);
-      setOk('Saved to favorites.');
+      if (favorited) {
+        await api.removeFavorite(id, token);
+        setFavorited(false);
+        setOk('Removed from favorites.');
+      } else {
+        await api.addFavorite(id, token);
+        setFavorited(true);
+        setOk('Saved to favorites.');
+      }
     } catch (err) {
-      setError(err.message || 'Could not favorite');
+      setError(err.message || 'Could not update favorites');
     } finally {
       setBusy(false);
     }
@@ -245,8 +273,14 @@ export default function ProductDetailPage() {
               </button>
             ) : null}
             <div className="detail-soft-actions">
-              <button className="btn btn-secondary" type="button" disabled={busy} onClick={toggleFavorite}>
-                Favorite
+              <button
+                className={`btn btn-secondary${favorited ? ' is-favorited' : ''}`}
+                type="button"
+                disabled={busy}
+                onClick={toggleFavorite}
+                aria-pressed={favorited}
+              >
+                {favorited ? 'Remove favorite' : 'Favorite'}
               </button>
               <button className="btn btn-secondary" type="button" onClick={share}>
                 Share

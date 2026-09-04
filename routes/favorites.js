@@ -25,6 +25,19 @@ router.get('/', user_jwt, async (req, res) => {
   }
 });
 
+router.get('/:productId/status', user_jwt, async (req, res) => {
+  try {
+    const fav = await Favorite.findOne({
+      user_id: req.user.id,
+      product_id: req.params.productId
+    }).select('_id');
+    return res.status(200).json({ success: true, favorited: Boolean(fav) });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to check favorite' });
+  }
+});
+
 router.post('/:productId', user_jwt, async (req, res) => {
   try {
     const product = await Product.findById(req.params.productId);
