@@ -4,15 +4,26 @@ const User = require('../models/user');
 const bcryptjs = require('bcryptjs');
 const user_jwt = require('../middleware/user_jwt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const { createPasswordOtp, verifyPasswordOtp, shouldReturnOtpInResponse } = require('../utils/otp');
 const { googleConfigured, verifyGoogleCredential } = require('../utils/googleAuth');
 const { requireMongo, mongoFailure } = require('../utils/mongo');
+const {
+    uploadProductImage,
+    signImageKey,
+    deleteProductImage
+} = require('../utils/s3');
 
 const {
     validatePassword,
     parsePhoneFields,
     phoneLookupKey
 } = require('../utils/authValidation');
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
 
 async function findUserByPhone(country_code, phone_no) {
     const parsed = parsePhoneFields({ country_code, phone_no });
@@ -33,10 +44,102 @@ async function findUserByPhone(country_code, phone_no) {
     return null;
 }
 
+const GENDERS = new Set(['', 'female', 'male', 'non_binary', 'prefer_not_to_say']);
+const CURRENCIES = new Set(['INR', 'USD', 'EUR']);
+
+function normalizeAddress(raw = {}) {
+    return {
+        line1: String(raw.line1 || '').trim(),
+        line2: String(raw.line2 || '').trim(),
+        city: String(raw.city || '').trim(),
+        state: String(raw.state || '').trim(),
+        country: String(raw.country || '').trim(),
+        pincode: String(raw.pincode || '').trim()
+    };
+}
+
+function normalizeSettings(raw = {}, current = {}) {
+    const base = {
+        orderUpdates: true,
+        messageAlerts: true,
+        promoAlerts: false,
+        reviewReminders: true,
+        stockAlerts: true,
+        showPhoneToBuyers: false,
+        useProfileAddressAtCheckout: true,
+        preferredCurrency: 'INR',
+        defaultCheckoutNote: '',
+        ...(current && typeof current === 'object' ? current : {})
+    };
+
+    const next = { ...base };
+    const boolKeys = [
+        'orderUpdates',
+        'messageAlerts',
+        'promoAlerts',
+        'reviewReminders',
+        'stockAlerts',
+        'showPhoneToBuyers',
+        'useProfileAddressAtCheckout'
+    ];
+    for (const key of boolKeys) {
+        if (raw[key] !== undefined) next[key] = Boolean(raw[key]);
+    }
+    if (raw.preferredCurrency !== undefined) {
+        const currency = String(raw.preferredCurrency || 'INR').toUpperCase();
+        if (!CURRENCIES.has(currency)) {
+            return { error: 'Preferred currency must be INR, USD, or EUR' };
+        }
+        next.preferredCurrency = currency;
+    }
+    if (raw.defaultCheckoutNote !== undefined) {
+        next.defaultCheckoutNote = String(raw.defaultCheckoutNote || '').trim().slice(0, 280);
+    }
+    return { settings: next };
+}
+
 function publicUser(user) {
     if (!user) return null;
     const obj = user.toObject ? user.toObject() : { ...user };
     delete obj.password;
+    if (!obj.address) {
+        obj.address = {
+            line1: '',
+            line2: '',
+            city: '',
+            state: '',
+            country: '',
+            pincode: ''
+        };
+    }
+    if (!obj.settings) {
+        obj.settings = {
+            orderUpdates: true,
+            messageAlerts: true,
+            promoAlerts: false,
+            reviewReminders: true,
+            stockAlerts: true,
+            showPhoneToBuyers: false,
+            useProfileAddressAtCheckout: true,
+            preferredCurrency: 'INR',
+            defaultCheckoutNote: ''
+        };
+    }
+    return obj;
+}
+
+async function publicUserWithAvatar(user) {
+    const obj = publicUser(user);
+    if (!obj) return null;
+    const key = obj.avatar_key || (!/^https?:\/\//i.test(String(obj.avatar || '')) ? obj.avatar : null);
+    if (key && !/^https?:\/\//i.test(String(key))) {
+        try {
+            const signed = await signImageKey(key);
+            if (signed) obj.avatar = signed;
+        } catch {
+            /* keep existing avatar */
+        }
+    }
     return obj;
 }
 
@@ -80,7 +183,7 @@ router.post('/google', async (req, res) => {
                     });
                 }
                 user.google_id = profile.google_id;
-                if (profile.avatar) user.avatar = profile.avatar;
+                if (profile.avatar && !user.avatar_key) user.avatar = profile.avatar;
                 await user.save();
             }
         }
@@ -94,7 +197,7 @@ router.post('/google', async (req, res) => {
                 avatar: profile.avatar
             });
         } else {
-            if (profile.avatar) user.avatar = profile.avatar;
+            if (profile.avatar && !user.avatar_key) user.avatar = profile.avatar;
             // Do not overwrite an existing display name on every Google sign-in.
             await user.save();
         }
@@ -103,7 +206,7 @@ router.post('/google', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);
@@ -117,7 +220,7 @@ router.get('/', user_jwt, async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, msg: 'User not found' });
         }
-        return res.status(200).json({ success: true, user });
+        return res.status(200).json({ success: true, user: await publicUserWithAvatar(user) });
     } catch (error) {
         console.log(error);
         return mongoFailure(res, error, 'Server error');
@@ -134,6 +237,22 @@ router.put('/profile', user_jwt, async (req, res) => {
             });
         }
 
+        const gender = req.body.gender !== undefined ? String(req.body.gender || '') : undefined;
+        if (gender !== undefined && !GENDERS.has(gender)) {
+            return res.status(400).json({ success: false, msg: 'Invalid gender value' });
+        }
+
+        let date_of_birth;
+        if (req.body.date_of_birth !== undefined) {
+            date_of_birth = String(req.body.date_of_birth || '').trim();
+            if (date_of_birth && !/^\d{4}-\d{2}-\d{2}$/.test(date_of_birth)) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'Date of birth must be YYYY-MM-DD'
+                });
+            }
+        }
+
         const user = await User.findById(req.user.id);
         if (!user) {
             return res.status(404).json({ success: false, msg: 'User not found' });
@@ -147,16 +266,99 @@ router.put('/profile', user_jwt, async (req, res) => {
             }
             user.email = email || undefined;
         }
+        if (req.body.first_name !== undefined) {
+            user.first_name = String(req.body.first_name || '').trim().slice(0, 80);
+        }
+        if (req.body.last_name !== undefined) {
+            user.last_name = String(req.body.last_name || '').trim().slice(0, 80);
+        }
+        if (gender !== undefined) user.gender = gender;
+        if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
+        if (req.body.address !== undefined) {
+            user.address = normalizeAddress(req.body.address || {});
+        }
         await user.save();
 
         return res.status(200).json({
             success: true,
             msg: 'Profile updated',
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);
         return mongoFailure(res, error, 'Failed to update profile');
+    }
+});
+
+
+router.put('/avatar', user_jwt, upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, msg: 'Profile photo is required' });
+        }
+        if (!String(req.file.mimetype || '').startsWith('image/')) {
+            return res.status(400).json({ success: false, msg: 'File must be an image' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, msg: 'User not found' });
+        }
+
+        const previousKey = user.avatar_key;
+        let key;
+        try {
+            key = await uploadProductImage(req.file);
+        } catch (error) {
+            return res.status(error.status || 500).json({
+                success: false,
+                msg: error.message || 'Photo upload failed'
+            });
+        }
+
+        user.avatar_key = key;
+        const signed = await signImageKey(key);
+        user.avatar = signed || key;
+        await user.save();
+
+        if (previousKey && previousKey !== key) {
+            deleteProductImage(previousKey).catch(() => {});
+        }
+
+        return res.status(200).json({
+            success: true,
+            msg: 'Profile photo updated',
+            user: await publicUserWithAvatar(user)
+        });
+    } catch (error) {
+        console.log(error);
+        return mongoFailure(res, error, 'Failed to update profile photo');
+    }
+});
+
+router.put('/settings', user_jwt, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, msg: 'User not found' });
+        }
+
+        const normalized = normalizeSettings(req.body || {}, user.settings);
+        if (normalized.error) {
+            return res.status(400).json({ success: false, msg: normalized.error });
+        }
+
+        user.settings = normalized.settings;
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            msg: 'Settings updated',
+            user: await publicUserWithAvatar(user)
+        });
+    } catch (error) {
+        console.log(error);
+        return mongoFailure(res, error, 'Failed to update settings');
     }
 });
 
@@ -224,7 +426,7 @@ router.post('/register', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (err) {
         console.log(err);
@@ -284,7 +486,7 @@ router.post('/login', async (req, res) => {
         return res.status(200).json({
             success: true,
             token,
-            user: publicUser(user)
+            user: await publicUserWithAvatar(user)
         });
     } catch (error) {
         console.log(error);

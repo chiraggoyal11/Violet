@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
+import BottomNav from './components/BottomNav';
 import Header from './components/Header';
 import CartPage from './pages/CartPage';
 import CatalogPage from './pages/CatalogPage';
@@ -10,6 +11,7 @@ import MinePage from './pages/MinePage';
 import OrdersPage from './pages/OrdersPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage from './pages/SettingsPage';
 import RegisterPage from './pages/RegisterPage';
 import SellPage from './pages/SellPage';
 import SellerDashboardPage from './pages/SellerDashboardPage';
@@ -23,11 +25,15 @@ function Shell() {
   const location = useLocation();
   const { user, booting } = useAuth();
   const isHome = location.pathname === '/';
-  // Keep marketing landing chrome-free for guests; signed-in users keep the app header.
+  // Keep marketing landing chrome-free for guests; signed-in users keep the app chrome.
   const showChrome = !isHome || Boolean(user);
 
   return (
-    <div className={`app-shell${isHome && !user ? ' app-shell-home' : ''}`}>
+    <div
+      className={`app-shell${isHome && !user ? ' app-shell-home' : ''}${
+        showChrome && !booting ? ' app-shell-chrome' : ''
+      }`}
+    >
       {showChrome && !booting ? <Header /> : null}
       <main className="main">
         <Routes>
@@ -95,6 +101,14 @@ function Shell() {
             }
           />
           <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <SettingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/cart"
             element={
               <RequireAuth>
@@ -124,6 +138,7 @@ function Shell() {
       {showChrome && !booting ? (
         <footer className="site-footer">Violet · handmade goods marketplace</footer>
       ) : null}
+      {showChrome && !booting ? <BottomNav /> : null}
     </div>
   );
 }

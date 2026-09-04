@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/product');
+const Favorite = require('../models/favorite');
 const user_jwt = require('../middleware/user_jwt');
 const { isValidPrice } = require('../middleware/validate');
 const multer = require('multer');
@@ -38,6 +39,9 @@ function buildListQuery(query, { includeDeleted = false } = {}) {
   if (query.category && Product.CATEGORIES.includes(query.category)) {
     queryObject.category = query.category;
   }
+  if (query.colour && Product.COLOURS.includes(query.colour)) {
+    queryObject.colour = query.colour;
+  }
   const min = query.minPrice !== undefined ? Number(query.minPrice) : null;
   const max = query.maxPrice !== undefined ? Number(query.maxPrice) : null;
   if ((min !== null && Number.isFinite(min)) || (max !== null && Number.isFinite(max))) {
@@ -60,6 +64,8 @@ function sortSpec(sort) {
       return { Price: -1 };
     case 'oldest':
       return { _id: 1 };
+    case 'popular':
+      return { favoriteCount: -1, _id: -1 };
     case 'newest':
     default:
       return { _id: -1 };
@@ -67,36 +73,65 @@ function sortSpec(sort) {
 }
 
 router.get('/meta/categories', (req, res) => {
-  return res.status(200).json({ success: true, categories: Product.CATEGORIES });
+  return res.status(200).json({
+    success: true,
+    categories: Product.CATEGORIES,
+    colours: Product.COLOURS
+  });
 });
 
 router.get('/', async (req, res) => {
   try {
     const queryObject = buildListQuery(req.query);
     const { page, limit, skip } = parsePagination(req.query);
-    const sort = sortSpec(req.query.sort);
+    const sortKey = req.query.sort || 'newest';
+    const sort = sortSpec(sortKey);
 
     let products;
     let total;
+    const needsAggregate =
+      sortKey === 'price_asc' ||
+      sortKey === 'price_desc' ||
+      sortKey === 'popular';
 
-    // Price sort on string fields is unreliable; use aggregation when sorting by price
-    if (req.query.sort === 'price_asc' || req.query.sort === 'price_desc') {
-      const direction = req.query.sort === 'price_asc' ? 1 : -1;
-      const pipeline = [
-        { $match: queryObject },
-        { $addFields: { priceNum: { $toDouble: { $ifNull: ['$Price', '0'] } } } },
-        { $sort: { priceNum: direction } },
-        {
-          $facet: {
-            data: [{ $skip: skip }, { $limit: limit }],
-            total: [{ $count: 'count' }]
+    if (needsAggregate) {
+      const pipeline = [{ $match: queryObject }];
+
+      if (sortKey === 'price_asc' || sortKey === 'price_desc') {
+        const direction = sortKey === 'price_asc' ? 1 : -1;
+        pipeline.push({
+          $addFields: { priceNum: { $toDouble: { $ifNull: ['$Price', '0'] } } }
+        });
+        pipeline.push({ $sort: { priceNum: direction } });
+      } else if (sortKey === 'popular') {
+        pipeline.push({
+          $addFields: { productIdStr: { $toString: '$_id' } }
+        });
+        pipeline.push({
+          $lookup: {
+            from: Favorite.collection.name,
+            localField: 'productIdStr',
+            foreignField: 'product_id',
+            as: '_favorites'
           }
+        });
+        pipeline.push({
+          $addFields: { favoriteCount: { $size: '$_favorites' } }
+        });
+        pipeline.push({ $project: { _favorites: 0, productIdStr: 0 } });
+        pipeline.push({ $sort: sort });
+      }
+
+      pipeline.push({
+        $facet: {
+          data: [{ $skip: skip }, { $limit: limit }],
+          total: [{ $count: 'count' }]
         }
-      ];
+      });
+
       const [result] = await Product.aggregate(pipeline);
       products = result.data || [];
       total = result.total?.[0]?.count || 0;
-      // hydrate as mongoose docs-like plain objects for attachImageUrls
     } else {
       [products, total] = await Promise.all([
         Product.find(queryObject).sort(sort).skip(skip).limit(limit),
@@ -113,7 +148,8 @@ router.get('/', async (req, res) => {
       limit,
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
-      categories: Product.CATEGORIES
+      categories: Product.CATEGORIES,
+      colours: Product.COLOURS
     });
   } catch (error) {
     console.log(error);
@@ -184,6 +220,7 @@ router.post('/', user_jwt, upload.array('Product_Image', 8), async (req, res) =>
     const Detail = (req.body.Product_Detail || '').trim();
     const Price = (req.body.Price || '').trim();
     const category = (req.body.category || 'Other').trim();
+    const colour = (req.body.colour || 'Other').trim();
     const stock = Math.max(0, parseInt(req.body.stock, 10) || 1);
 
     if (!Name || !Detail || !Price) {
@@ -198,6 +235,9 @@ router.post('/', user_jwt, upload.array('Product_Image', 8), async (req, res) =>
     if (!Product.CATEGORIES.includes(category)) {
       return res.status(400).json({ success: false, msg: 'Invalid category' });
     }
+    if (!Product.COLOURS.includes(colour)) {
+      return res.status(400).json({ success: false, msg: 'Invalid colour' });
+    }
 
     const prod = new Product({
       user_id: req.user.id,
@@ -205,6 +245,7 @@ router.post('/', user_jwt, upload.array('Product_Image', 8), async (req, res) =>
       Product_Detail: Detail,
       Price,
       category,
+      colour,
       stock,
       status: stock === 0 ? 'sold' : 'active'
     });
@@ -314,7 +355,7 @@ router.put('/:id', user_jwt, async (req, res) => {
       });
     }
 
-    const allowed = ['Product_Name', 'Product_Detail', 'Price', 'category', 'stock', 'status'];
+    const allowed = ['Product_Name', 'Product_Detail', 'Price', 'category', 'colour', 'stock', 'status'];
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         product[key] = typeof req.body[key] === 'string' ? String(req.body[key]).trim() : req.body[key];
@@ -332,6 +373,9 @@ router.put('/:id', user_jwt, async (req, res) => {
     }
     if (product.category && !Product.CATEGORIES.includes(product.category)) {
       return res.status(400).json({ success: false, msg: 'Invalid category' });
+    }
+    if (product.colour && !Product.COLOURS.includes(product.colour)) {
+      return res.status(400).json({ success: false, msg: 'Invalid colour' });
     }
     if (product.stock !== undefined) {
       product.stock = Math.max(0, Number(product.stock) || 0);

@@ -30,6 +30,9 @@ export default function ProductCard({ product, to }) {
         {product.category ? (
           <span className="badge category">{product.category}</span>
         ) : null}
+        {product.colour && product.colour !== 'Other' ? (
+          <span className="badge colour">{product.colour}</span>
+        ) : null}
       </div>
       <div className="product-body">
         <h3>{product.Product_Name}</h3>

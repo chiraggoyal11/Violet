@@ -1,6 +1,21 @@
 const mongoose = require('mongoose');
 
 const CATEGORIES = ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+const COLOURS = [
+  'Black',
+  'White',
+  'Red',
+  'Blue',
+  'Green',
+  'Yellow',
+  'Pink',
+  'Purple',
+  'Brown',
+  'Beige',
+  'Grey',
+  'Multicolor',
+  'Other'
+];
 
 const productSchema = new mongoose.Schema(
   {
@@ -11,6 +26,12 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       enum: CATEGORIES,
+      default: 'Other',
+      index: true
+    },
+    colour: {
+      type: String,
+      enum: COLOURS,
       default: 'Other',
       index: true
     },
@@ -31,5 +52,6 @@ const productSchema = new mongoose.Schema(
 );
 
 productSchema.statics.CATEGORIES = CATEGORIES;
+productSchema.statics.COLOURS = COLOURS;
 
 module.exports = mongoose.model('Product', productSchema);
