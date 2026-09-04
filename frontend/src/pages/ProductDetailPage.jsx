@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { formatPrice } from '../components/ProductCard';
 
+const QUICK_PROMPTS = [
+  'Is this still available?',
+  'Can you ship to my city?',
+  'Do you offer customization?',
+];
+
 export default function ProductDetailPage() {
   const { id } = useParams();
   const { user, token } = useAuth();
   const navigate = useNavigate();
+  const dialogTitleId = useId();
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [average, setAverage] = useState(0);
@@ -51,6 +58,20 @@ export default function ProductDetailPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!showMessage) return undefined;
+    function onKey(e) {
+      if (e.key === 'Escape') setShowMessage(false);
+    }
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [showMessage]);
 
   async function addCart() {
     if (!token) return navigate('/login');
@@ -112,6 +133,12 @@ export default function ProductDetailPage() {
     }
   }
 
+  function openMessageSeller() {
+    if (!token) return navigate('/login');
+    setShowMessage(true);
+    setError('');
+  }
+
   async function messageSeller(e) {
     e.preventDefault();
     if (!token) return navigate('/login');
@@ -148,7 +175,7 @@ export default function ProductDetailPage() {
       <section className="section">
         <p className="status error">{error}</p>
         <Link className="btn btn-secondary" to="/catalog">
-          Back to catalog
+          Back to Home
         </Link>
       </section>
     );
@@ -156,11 +183,12 @@ export default function ProductDetailPage() {
 
   const sold = product.status === 'sold' || Number(product.stock) === 0;
   const isOwner = user && String(user._id) === String(product.user_id);
+  const thumb = gallery[0] || null;
 
   return (
     <section className="section detail-section">
       <Link className="muted-link" to="/catalog">
-        ← Back to catalog
+        ← Back to Home
       </Link>
       <div className="detail-layout">
         <div className="detail-media">
@@ -190,13 +218,14 @@ export default function ProductDetailPage() {
         <div className="detail-copy">
           <p className="eyebrow">
             {product.category || 'Other'}
+            {product.colour && product.colour !== 'Other' ? ` · ${product.colour}` : ''}
             {average ? ` · ★ ${average}` : ''}
           </p>
           <h1>{product.Product_Name}</h1>
           <p className="detail-price">{formatPrice(product.Price)}</p>
           <p>{product.Product_Detail}</p>
           <p className="muted-link">Stock: {product.stock ?? 1}</p>
-          {error ? <p className="status error">{error}</p> : null}
+          {error && !showMessage ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
           <div className="form-actions">
             {!sold && !isOwner ? (
@@ -209,7 +238,7 @@ export default function ProductDetailPage() {
                 className="btn btn-secondary"
                 type="button"
                 disabled={busy}
-                onClick={() => (token ? setShowMessage((v) => !v) : navigate('/login'))}
+                onClick={openMessageSeller}
               >
                 Message seller
               </button>
@@ -221,23 +250,88 @@ export default function ProductDetailPage() {
               Share
             </button>
           </div>
-          {showMessage && !isOwner ? (
-            <form className="form panel message-compose" onSubmit={messageSeller}>
-              <h3>Message the seller</h3>
+        </div>
+      </div>
+
+      {showMessage && !isOwner ? (
+        <div
+          className="msg-modal-overlay"
+          role="presentation"
+          onClick={() => setShowMessage(false)}
+        >
+          <div
+            className="msg-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="msg-modal-head">
+              <div>
+                <p className="eyebrow">Chat with seller</p>
+                <h2 id={dialogTitleId}>Message about this listing</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label="Close"
+                onClick={() => setShowMessage(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="msg-modal-product">
+              {thumb ? <img src={thumb} alt="" /> : <div className="msg-modal-fallback" />}
+              <div>
+                <strong>{product.Product_Name}</strong>
+                <span>{formatPrice(product.Price)}</span>
+              </div>
+            </div>
+
+            <div className="msg-quick-prompts" aria-label="Suggested messages">
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  className="msg-chip"
+                  onClick={() => setMessageBody(prompt)}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            <form className="msg-modal-form" onSubmit={messageSeller}>
+              <label className="visually-hidden" htmlFor="seller-message">
+                Your message
+              </label>
               <textarea
-                rows={3}
+                id="seller-message"
+                rows={4}
                 value={messageBody}
                 onChange={(e) => setMessageBody(e.target.value)}
                 placeholder="Ask about shipping, customization, or availability…"
                 required
+                autoFocus
               />
-              <button className="btn btn-primary" type="submit" disabled={busy}>
-                {busy ? 'Sending…' : 'Send message'}
-              </button>
+              {error ? <p className="status error">{error}</p> : null}
+              <div className="msg-modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowMessage(false)}
+                >
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={busy || !messageBody.trim()}>
+                  {busy ? 'Sending…' : 'Send & open chat'}
+                </button>
+              </div>
             </form>
-          ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="reviews">
         <h2>Reviews</h2>
