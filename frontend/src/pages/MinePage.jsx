@@ -124,9 +124,6 @@ export default function MinePage() {
           <p>Manage products you published as {user.username}.</p>
         </div>
         <div className="form-actions">
-          <Link className="btn btn-secondary" to="/seller">
-            Dashboard
-          </Link>
           <Link className="btn btn-primary" to="/sell">
             New listing
           </Link>
