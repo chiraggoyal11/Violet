@@ -136,97 +136,99 @@ export default function CatalogPage() {
   }
 
   return (
-    <section className="section">
-      <div className="section-heading">
-        <div>
-          <p className="section-kicker">Shop</p>
-          <h2>Handmade finds</h2>
-          <p>Search, filter, and sort listings from makers on Violet.</p>
+    <section className="section home-section">
+      <div className="home-sticky-bar">
+        <div className="section-heading home-heading">
+          <div>
+            <p className="section-kicker">Shop</p>
+            <h2>Handmade finds</h2>
+            <p>Search, filter, and sort listings from makers on Violet.</p>
+          </div>
         </div>
-      </div>
 
-      <div className="home-toolbar">
-        <form className="home-search" onSubmit={applySearch}>
-          <input
-            type="search"
-            placeholder="Search handmade goods"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search products"
-          />
-          <button className="btn btn-accent" type="submit" disabled={loading}>
-            Search
-          </button>
-        </form>
+        <div className="home-toolbar">
+          <form className="home-search" onSubmit={applySearch}>
+            <input
+              type="search"
+              placeholder="Search handmade goods"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search products"
+            />
+            <button className="btn btn-accent" type="submit" disabled={loading}>
+              Search
+            </button>
+          </form>
 
-        <div className="home-toolbar-actions">
-          <button
-            type="button"
-            className={`btn btn-secondary filter-trigger${activeFilterCount ? ' has-filters' : ''}`}
-            onClick={openFilters}
-            aria-expanded={filtersOpen}
-          >
-            Filters
-            {activeFilterCount ? (
-              <span className="filter-count">{activeFilterCount}</span>
-            ) : null}
-          </button>
-          <label className="sort-control">
-            <span className="visually-hidden">Sort</span>
-            <select
-              value={sort}
-              onChange={(e) => onSortChange(e.target.value)}
-              aria-label="Sort products"
-            >
-              {SORTS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  Sort: {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {activeFilterCount || filters.name ? (
-        <div className="active-chips" aria-label="Active filters">
-          {filters.name ? (
+          <div className="home-toolbar-actions">
             <button
               type="button"
-              className="active-chip"
-              onClick={() => {
-                setQuery('');
-                setPage(1);
-                setFilters((prev) => ({ ...prev, name: '' }));
-              }}
+              className={`btn btn-secondary filter-trigger${activeFilterCount ? ' has-filters' : ''}`}
+              onClick={openFilters}
+              aria-expanded={filtersOpen}
             >
-              Search: {filters.name} ×
+              Filters
+              {activeFilterCount ? (
+                <span className="filter-count">{activeFilterCount}</span>
+              ) : null}
             </button>
-          ) : null}
-          {filters.category ? (
-            <button type="button" className="active-chip" onClick={openFilters}>
-              {filters.category}
-            </button>
-          ) : null}
-          {filters.colour ? (
-            <button type="button" className="active-chip" onClick={openFilters}>
-              {filters.colour}
-            </button>
-          ) : null}
-          {filters.minPrice !== '' || filters.maxPrice !== '' ? (
-            <button type="button" className="active-chip" onClick={openFilters}>
-              Price
-              {filters.minPrice !== '' ? ` ≥ ${filters.minPrice}` : ''}
-              {filters.maxPrice !== '' ? ` ≤ ${filters.maxPrice}` : ''}
-            </button>
-          ) : null}
-          {filters.status && filters.status !== 'active' ? (
-            <button type="button" className="active-chip" onClick={openFilters}>
-              {filters.status === 'sold' ? 'Sold' : 'All availability'}
-            </button>
-          ) : null}
+            <label className="sort-control">
+              <span className="visually-hidden">Sort</span>
+              <select
+                value={sort}
+                onChange={(e) => onSortChange(e.target.value)}
+                aria-label="Sort products"
+              >
+                {SORTS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    Sort: {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
-      ) : null}
+
+        {activeFilterCount || filters.name ? (
+          <div className="active-chips" aria-label="Active filters">
+            {filters.name ? (
+              <button
+                type="button"
+                className="active-chip"
+                onClick={() => {
+                  setQuery('');
+                  setPage(1);
+                  setFilters((prev) => ({ ...prev, name: '' }));
+                }}
+              >
+                Search: {filters.name} ×
+              </button>
+            ) : null}
+            {filters.category ? (
+              <button type="button" className="active-chip" onClick={openFilters}>
+                {filters.category}
+              </button>
+            ) : null}
+            {filters.colour ? (
+              <button type="button" className="active-chip" onClick={openFilters}>
+                {filters.colour}
+              </button>
+            ) : null}
+            {filters.minPrice !== '' || filters.maxPrice !== '' ? (
+              <button type="button" className="active-chip" onClick={openFilters}>
+                Price
+                {filters.minPrice !== '' ? ` ≥ ${filters.minPrice}` : ''}
+                {filters.maxPrice !== '' ? ` ≤ ${filters.maxPrice}` : ''}
+              </button>
+            ) : null}
+            {filters.status && filters.status !== 'active' ? (
+              <button type="button" className="active-chip" onClick={openFilters}>
+                {filters.status === 'sold' ? 'Sold' : 'All availability'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {filtersOpen ? (
         <div className="filter-overlay" role="presentation" onClick={() => setFiltersOpen(false)}>
