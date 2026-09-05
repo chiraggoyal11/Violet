@@ -219,6 +219,23 @@ describe('Violet API', () => {
       .expect(200);
     assert.equal(popular.body.success, true);
     assert.ok(popular.body.product.some((p) => p._id === blueId));
+
+    const statusOn = await request(app)
+      .get(`/api/violet/favorites/${blueId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    assert.equal(statusOn.body.favorited, true);
+
+    await request(app)
+      .delete(`/api/violet/favorites/${blueId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const statusOff = await request(app)
+      .get(`/api/violet/favorites/${blueId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    assert.equal(statusOff.body.favorited, false);
   });
 
   it('returns product detail with image gallery URLs', async () => {

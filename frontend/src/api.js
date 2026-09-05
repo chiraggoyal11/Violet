@@ -206,6 +206,8 @@ export const api = {
     }),
 
   listFavorites: (token) => request(FAV_BASE, '/', { token }),
+  favoriteStatus: (productId, token) =>
+    request(FAV_BASE, `/${productId}/status`, { token }),
   addFavorite: (productId, token) =>
     request(FAV_BASE, `/${productId}`, { method: 'POST', token }),
   removeFavorite: (productId, token) =>
