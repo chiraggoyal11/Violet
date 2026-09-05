@@ -70,13 +70,10 @@ export default function SellPage() {
   }
 
   return (
-    <div className="form-layout">
+    <div className="form-layout form-layout-wide form-layout-fit">
       <div className="panel wide">
         <h1>List a product</h1>
-        <p className="lede">
-          Signed in as {user.username}. Photos are compressed in the browser, then
-          uploaded to your AWS S3 bucket.
-        </p>
+        <p className="lede">Add a listing as {user.username}. Photos upload after you publish.</p>
         <form className="form" onSubmit={onSubmit}>
           <div className="form-field">
             <label htmlFor="name">Product name</label>
@@ -86,62 +83,64 @@ export default function SellPage() {
             <label htmlFor="detail">Details</label>
             <textarea
               id="detail"
-              rows={4}
+              rows={2}
               value={detail}
               onChange={(e) => setDetail(e.target.value)}
               required
             />
           </div>
-          <div className="form-field">
-            <label htmlFor="price">Price</label>
-            <input
-              id="price"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="19.99"
-              required
-            />
+          <div className="form-grid">
+            <div className="form-field">
+              <label htmlFor="price">Price</label>
+              <input
+                id="price"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="19.99"
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="stock">Stock</label>
+              <input
+                id="stock"
+                type="number"
+                min="0"
+                value={stock}
+                onChange={(e) => setStock(Number(e.target.value))}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="category">Category</label>
+              <select
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="colour">Colour</label>
+              <select
+                id="colour"
+                value={colour}
+                onChange={(e) => setColour(e.target.value)}
+              >
+                {COLOURS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="form-field">
-            <label htmlFor="category">Category</label>
-            <select
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="colour">Colour</label>
-            <select
-              id="colour"
-              value={colour}
-              onChange={(e) => setColour(e.target.value)}
-            >
-              {COLOURS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-field">
-            <label htmlFor="stock">Stock</label>
-            <input
-              id="stock"
-              type="number"
-              min="0"
-              value={stock}
-              onChange={(e) => setStock(Number(e.target.value))}
-            />
-          </div>
-          <div className="form-field">
-            <label htmlFor="image">Product photos (optional, up to 8)</label>
+            <label htmlFor="image">Photos (optional, up to 8)</label>
             <input
               id="image"
               type="file"

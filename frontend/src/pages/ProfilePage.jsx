@@ -105,17 +105,13 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="form-layout form-layout-wide">
+    <div className="form-layout form-layout-wide form-layout-fit">
       <div className="panel wide">
         <h1>Your profile</h1>
-        <p className="lede">
-          {user.auth_provider === 'google'
-            ? `Signed in with Google${user.email ? ` (${user.email})` : ''}. Add shipping details for faster checkout.`
-            : `Phone ${formatPhoneDisplay(user)} is used to sign in and cannot be changed here.`}
-        </p>
+        <p className="lede">Keep your account and shipping details up to date.</p>
         <form className="form profile-form" onSubmit={onSubmit}>
           <fieldset className="form-section">
-            <legend>Photo</legend>
+            <legend>Account</legend>
             <div className="profile-photo-row">
               <div className="profile-photo-preview" aria-hidden="true">
                 {preview ? (
@@ -133,15 +129,9 @@ export default function ProfilePage() {
                   onChange={onPhotoChange}
                   disabled={photoBusy}
                 />
-                <p className="muted-link">
-                  {photoBusy ? 'Uploading…' : 'JPG or PNG, cropped square works best.'}
-                </p>
+                {photoBusy ? <p className="muted-link">Uploading…</p> : null}
               </div>
             </div>
-          </fieldset>
-
-          <fieldset className="form-section">
-            <legend>Account</legend>
             <div className="form-grid">
               <div className="form-field">
                 <label htmlFor="username">Display name</label>
@@ -216,7 +206,7 @@ export default function ProfilePage() {
           <fieldset className="form-section">
             <legend>Shipping address</legend>
             <div className="form-grid">
-              <div className="form-field form-field-full">
+              <div className="form-field">
                 <label htmlFor="line1">Address line 1</label>
                 <input
                   id="line1"
@@ -225,7 +215,7 @@ export default function ProfilePage() {
                   autoComplete="address-line1"
                 />
               </div>
-              <div className="form-field form-field-full">
+              <div className="form-field">
                 <label htmlFor="line2">Address line 2</label>
                 <input
                   id="line2"
