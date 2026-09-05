@@ -313,8 +313,18 @@ img {
 }
 
 .bottom-nav-icon {
+  position: relative;
   display: grid;
   place-items: center;
+}
+
+.bottom-nav-icon .badge-count {
+  top: -0.35rem;
+  right: -0.55rem;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  line-height: 1.05rem;
+  font-size: 0.62rem;
 }
 
 .main {
