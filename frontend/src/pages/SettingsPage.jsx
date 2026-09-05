@@ -55,12 +55,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="form-layout form-layout-wide">
+    <div className="form-layout form-layout-wide form-layout-fit">
       <div className="panel wide">
         <h1>Settings</h1>
         <p className="lede">
-          Control shopping preferences, alerts, and how buyers contact you. Edit
-          shipping details in{' '}
+          Alerts and checkout defaults. Address is in{' '}
           <Link className="text-link" to="/profile">
             Profile
           </Link>
@@ -175,7 +174,7 @@ export default function SettingsPage() {
                 <label htmlFor="defaultCheckoutNote">Default checkout note</label>
                 <textarea
                   id="defaultCheckoutNote"
-                  rows={3}
+                  rows={2}
                   maxLength={280}
                   value={form.defaultCheckoutNote || ''}
                   onChange={(e) =>
