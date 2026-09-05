@@ -244,6 +244,7 @@ export const api = {
 
   listConversations: (token) => request(MSG_BASE, '/', { token }),
   getConversation: (id, token) => request(MSG_BASE, `/${id}/messages`, { token }),
+  unreadMessageCount: (token) => request(MSG_BASE, '/unread-count', { token }),
   sendMessage: (payload, token) =>
     request(MSG_BASE, '/', { method: 'POST', body: payload, token }),
 
