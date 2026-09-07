@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
@@ -27,6 +27,18 @@ function hasProfileAddress(address) {
   );
 }
 
+function hasAnyAddressField(address) {
+  if (!address) return false;
+  return Boolean(
+    address.line1 ||
+      address.line2 ||
+      address.city ||
+      address.state ||
+      address.country ||
+      address.pincode,
+  );
+}
+
 function formatAddress(address) {
   if (!address) return '';
   return [address.line1, address.line2, address.city, address.state, address.country, address.pincode]
@@ -36,13 +48,14 @@ function formatAddress(address) {
 
 const STEPS = [
   { id: 'address', label: 'Address' },
-  { id: 'review', label: 'Review' },
+  { id: 'review', label: 'Order details' },
   { id: 'payment', label: 'Payment' },
 ];
 
 export default function CheckoutPage() {
-  const { user, token, booting } = useAuth();
+  const { user, token, booting, updateLocalUser } = useAuth();
   const navigate = useNavigate();
+  const addressTouchedRef = useRef(false);
   const [step, setStep] = useState('address');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState('0.00');
@@ -75,11 +88,13 @@ export default function CheckoutPage() {
       setLoading(true);
       setError('');
       try {
-        const [cartData, payment] = await Promise.all([
+        const [cartData, payment, me] = await Promise.all([
           api.getCart(token),
           api.paymentConfig(token).catch(() => null),
+          api.me(token).catch(() => null),
         ]);
         if (cancelled) return;
+        if (me?.user) updateLocalUser(me.user);
         setItems(cartData.items || []);
         setTotal(cartData.total || '0.00');
         if (payment?.payment) setPayConfig(payment.payment);
@@ -95,7 +110,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, updateLocalUser]);
 
   useEffect(() => {
     const defaultNote = user?.settings?.defaultCheckoutNote;
@@ -103,10 +118,14 @@ export default function CheckoutPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    if (useProfileDefault && profileReady) {
-      setAddress({ ...emptyAddress, ...profileAddress });
-      setEditingAddress(false);
+    if (!user || addressTouchedRef.current) return;
+    const fromProfile = user.address || emptyAddress;
+    const useDefault = user.settings?.useProfileAddressAtCheckout !== false;
+
+    if (useDefault && hasAnyAddressField(fromProfile)) {
+      const seeded = { ...emptyAddress, ...fromProfile };
+      setAddress(seeded);
+      setEditingAddress(!hasProfileAddress(seeded));
     } else {
       setAddress(emptyAddress);
       setEditingAddress(true);
@@ -205,7 +224,19 @@ export default function CheckoutPage() {
   if (!user) return <Navigate to="/login" replace />;
 
   function patchAddress(updates) {
+    addressTouchedRef.current = true;
     setAddress((prev) => ({ ...prev, ...updates }));
+  }
+
+  function startEditingAddress() {
+    addressTouchedRef.current = true;
+    setEditingAddress(true);
+  }
+
+  function applyProfileAddress() {
+    const seeded = { ...emptyAddress, ...profileAddress };
+    setAddress(seeded);
+    setEditingAddress(!hasProfileAddress(seeded));
   }
 
   function continueFromAddress(e) {
@@ -388,12 +419,12 @@ export default function CheckoutPage() {
             <h3>
               {receipt.status === 'pending' && receipt.method === 'cod'
                 ? 'Order placed'
-                : 'Payment successful'}
+                : 'Order placed'}
             </h3>
             <p className="lede">
               {receipt.status === 'pending' && receipt.method === 'cod'
                 ? 'Pay the seller when your order arrives.'
-                : 'Your payment was received and the order is confirmed.'}
+                : 'Payment succeeded and your order is confirmed.'}
             </p>
             <dl className="payment-receipt">
               <div>
@@ -503,7 +534,7 @@ export default function CheckoutPage() {
         </div>
         <div className="panel wide checkout-panel">
           <div className="payment-failed">
-            <h3>Payment failed</h3>
+            <h3>Order failed</h3>
             <p className="lede">
               {error ||
                 'The UPI payment was not completed within 5 minutes. Your order was cancelled.'}
@@ -546,7 +577,7 @@ export default function CheckoutPage() {
         <div>
           <p className="section-kicker">Checkout</p>
           <h2>Complete your order</h2>
-          <p>Confirm shipping, review details, then pay securely.</p>
+          <p>Confirm address, review order details, then pay.</p>
         </div>
         <Link className="btn btn-secondary" to="/cart">
           Back to cart
@@ -574,31 +605,58 @@ export default function CheckoutPage() {
 
       {step === 'address' ? (
         <form className="panel wide checkout-panel" onSubmit={continueFromAddress}>
-          <h3>Ship to</h3>
-          <p className="lede">
-            {profileReady
-              ? 'Your profile address is shown as the default. Editing here only applies to this order — it will not update your profile.'
-              : 'Add a shipping address for this order. It will not be saved to your profile.'}
-          </p>
-
+          <h3>Shipping address</h3>
           {!editingAddress && addressComplete ? (
-            <div className="checkout-address-card">
-              <p>{formatAddress(address)}</p>
-              <div className="form-actions">
+            <>
+              <p className="lede">
+                Using your saved profile address. Edits here apply to this order only.
+              </p>
+              <div className="checkout-address-selected">
+                <div className="checkout-address-selected-main">
+                  <span className="checkout-address-selected-badge" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div>
+                    <p className="checkout-address-selected-label">Selected address</p>
+                    <p className="checkout-address-selected-text">{formatAddress(address)}</p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setEditingAddress(true)}
+                  className="checkout-address-edit"
+                  onClick={startEditingAddress}
+                  aria-label="Edit address"
+                  title="Edit address"
                 >
-                  Edit address
-                </button>
-                <button className="btn btn-accent" type="submit">
-                  Use this address
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M13.5 6.5l3 3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               </div>
-            </div>
+              <div className="form-actions">
+                <button className="btn btn-accent" type="submit">
+                  Continue to order details
+                </button>
+              </div>
+            </>
           ) : (
             <>
+              <p className="lede">
+                {profileReady
+                  ? 'Update the shipping address for this order. It will not change your profile.'
+                  : 'Add a shipping address to continue. It will not be saved to your profile unless you update Profile.'}
+              </p>
               <AddressFields
                 address={address}
                 onChange={patchAddress}
@@ -610,16 +668,22 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setAddress({ ...emptyAddress, ...profileAddress });
-                      setEditingAddress(false);
-                    }}
+                    onClick={applyProfileAddress}
                   >
                     Use profile address
                   </button>
                 ) : null}
+                {addressComplete && editingAddress ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setEditingAddress(false)}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
                 <button className="btn btn-accent" type="submit">
-                  Continue to review
+                  Continue to order details
                 </button>
               </div>
             </>
@@ -629,7 +693,7 @@ export default function CheckoutPage() {
 
       {step === 'review' ? (
         <form className="panel wide checkout-panel" onSubmit={continueFromReview}>
-          <h3>Order review</h3>
+          <h3>Order details</h3>
           <p className="lede">Check products, total, and shipping before payment.</p>
 
           <div className="checkout-review-block">
@@ -661,7 +725,7 @@ export default function CheckoutPage() {
                 type="button"
                 className="text-link"
                 onClick={() => {
-                  setEditingAddress(true);
+                  startEditingAddress();
                   setStep('address');
                 }}
               >
