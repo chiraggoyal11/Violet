@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
@@ -14,6 +14,18 @@ const emptyAddress = {
   country: '',
   pincode: '',
 };
+
+function hasAnyAddressField(address) {
+  if (!address) return false;
+  return Boolean(
+    address.line1 ||
+      address.line2 ||
+      address.city ||
+      address.state ||
+      address.country ||
+      address.pincode,
+  );
+}
 
 function hasProfileAddress(address) {
   if (!address) return false;
@@ -57,9 +69,9 @@ export default function CheckoutPage() {
   const [cardName, setCardName] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
+  const addressTouchedRef = useRef(false);
 
   const profileAddress = user?.address || emptyAddress;
-  const useProfileDefault = user?.settings?.useProfileAddressAtCheckout !== false;
   const profileReady = hasProfileAddress(profileAddress);
 
   useEffect(() => {
@@ -94,9 +106,16 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (useProfileDefault && profileReady) {
-      setAddress({ ...emptyAddress, ...profileAddress });
-      setEditingAddress(false);
+    if (addressTouchedRef.current) return;
+
+    const fromProfile = user.address || emptyAddress;
+    const useDefault = user.settings?.useProfileAddressAtCheckout !== false;
+
+    if (useDefault && hasAnyAddressField(fromProfile)) {
+      const seeded = { ...emptyAddress, ...fromProfile };
+      setAddress(seeded);
+      // Incomplete profile data stays in the form — never wipe to blank.
+      setEditingAddress(!hasProfileAddress(seeded));
     } else {
       setAddress(emptyAddress);
       setEditingAddress(true);
@@ -119,7 +138,19 @@ export default function CheckoutPage() {
   if (!user) return <Navigate to="/login" replace />;
 
   function patchAddress(updates) {
+    addressTouchedRef.current = true;
     setAddress((prev) => ({ ...prev, ...updates }));
+  }
+
+  function startEditingAddress() {
+    addressTouchedRef.current = true;
+    setEditingAddress(true);
+  }
+
+  function applyProfileAddress() {
+    const seeded = { ...emptyAddress, ...profileAddress };
+    setAddress(seeded);
+    setEditingAddress(!hasProfileAddress(seeded));
   }
 
   function continueFromAddress(e) {
@@ -243,7 +274,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setEditingAddress(true)}
+                  onClick={startEditingAddress}
                 >
                   Edit address
                 </button>
@@ -265,10 +296,7 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setAddress({ ...emptyAddress, ...profileAddress });
-                      setEditingAddress(false);
-                    }}
+                    onClick={applyProfileAddress}
                   >
                     Use profile address
                   </button>
@@ -316,7 +344,7 @@ export default function CheckoutPage() {
                 type="button"
                 className="text-link"
                 onClick={() => {
-                  setEditingAddress(true);
+                  startEditingAddress();
                   setStep('address');
                 }}
               >

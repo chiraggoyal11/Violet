@@ -88,8 +88,21 @@ export default function ProfilePage() {
       const hasAnyAddress = Boolean(
         addr.line1 || addr.line2 || addr.city || addr.state || addr.country || addr.pincode,
       );
-      if (hasAnyAddress && addr.pincode && !isValidPincode(addr.pincode)) {
-        throw new Error('Pincode must be exactly 6 digits.');
+      if (hasAnyAddress) {
+        const complete = Boolean(
+          addr.line1?.trim() &&
+            addr.city?.trim() &&
+            addr.state?.trim() &&
+            addr.country?.trim() &&
+            isValidPincode(addr.pincode),
+        );
+        if (!complete) {
+          throw new Error(
+            addr.pincode && !isValidPincode(addr.pincode)
+              ? 'Pincode must be exactly 6 digits.'
+              : 'Add a complete shipping address (line 1, city, state, country, and 6-digit pincode), or clear all address fields.',
+          );
+        }
       }
       const data = await api.updateProfile(
         {
@@ -218,6 +231,14 @@ export default function ProfilePage() {
               address={form.address}
               onChange={patchAddress}
               idPrefix="profile"
+              required={Boolean(
+                form.address?.line1 ||
+                  form.address?.line2 ||
+                  form.address?.city ||
+                  form.address?.state ||
+                  form.address?.country ||
+                  form.address?.pincode,
+              )}
             />
           </fieldset>
 
