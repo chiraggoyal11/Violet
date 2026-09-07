@@ -229,8 +229,12 @@ export const api = {
   removeCartItem: (productId, token) =>
     request(CART_BASE, `/items/${productId}`, { method: 'DELETE', token }),
 
-  checkout: (note, token) =>
-    request(ORDER_BASE, '/checkout', { method: 'POST', body: { note }, token }),
+  checkout: (payload, token) =>
+    request(ORDER_BASE, '/checkout', {
+      method: 'POST',
+      body: typeof payload === 'string' ? { note: payload } : payload,
+      token,
+    }),
   listOrders: (token) => request(ORDER_BASE, '/', { token }),
   listSales: (token) => request(ORDER_BASE, '/sales', { token }),
 

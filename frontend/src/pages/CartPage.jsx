@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import EmptyState from '../components/EmptyState';
@@ -7,11 +7,10 @@ import { formatPrice } from '../components/ProductCard';
 
 export default function CartPage() {
   const { user, token, booting } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState('0.00');
-  const [note, setNote] = useState('');
   const [error, setError] = useState('');
-  const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -33,11 +32,6 @@ export default function CartPage() {
     if (token) load();
   }, [token]);
 
-  useEffect(() => {
-    const defaultNote = user?.settings?.defaultCheckoutNote;
-    if (defaultNote) setNote(defaultNote);
-  }, [user]);
-
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
 
@@ -49,24 +43,6 @@ export default function CartPage() {
       setTotal(data.total || '0.00');
     } catch (err) {
       setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function checkout(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    setOk('');
-    try {
-      const data = await api.checkout(note, token);
-      setOk(`Order placed (#${String(data.order._id).slice(-6)})`);
-      setItems([]);
-      setTotal('0.00');
-      setNote('');
-    } catch (err) {
-      setError(err.message || 'Checkout failed');
     } finally {
       setBusy(false);
     }
@@ -85,7 +61,6 @@ export default function CartPage() {
         </Link>
       </div>
       {error ? <p className="status error">{error}</p> : null}
-      {ok ? <p className="status ok">{ok}</p> : null}
       {loading ? <p className="empty">Loading cart…</p> : null}
       {!loading && items.length === 0 ? (
         <EmptyState
@@ -143,30 +118,28 @@ export default function CartPage() {
             })}
           </div>
 
-          <form className="checkout-card" onSubmit={checkout}>
+          <div className="checkout-card">
             <p className="section-kicker">Summary</p>
             <h3>Ready to order</h3>
             <div className="checkout-total">
               <span>Total</span>
               <strong>{formatPrice(total)}</strong>
             </div>
-            <div className="form-field">
-              <label htmlFor="note">Order note (optional)</label>
-              <textarea
-                id="note"
-                rows={2}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Gift wrap, leave at door…"
-              />
-            </div>
-            <button className="btn btn-accent" type="submit" disabled={busy}>
-              {busy ? 'Placing…' : 'Place order'}
+            <p className="muted-link">
+              Next you will confirm shipping address and payment.
+            </p>
+            <button
+              className="btn btn-accent"
+              type="button"
+              disabled={busy}
+              onClick={() => navigate('/checkout')}
+            >
+              Place order
             </button>
             <Link className="muted-link checkout-continue" to="/catalog">
               Continue shopping
             </Link>
-          </form>
+          </div>
         </div>
       ) : null}
     </section>

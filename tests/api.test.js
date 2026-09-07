@@ -425,10 +425,25 @@ describe('Violet API', () => {
     const checkout = await request(app)
       .post('/api/violet/orders/checkout')
       .set('Authorization', `Bearer ${token2}`)
-      .send({ note: 'test checkout' })
+      .send({
+        note: 'test checkout',
+        shippingAddress: {
+          line1: '12 Test Lane',
+          line2: 'Apt 4',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'upi',
+        payment: { upiId: 'buyer@upi' }
+      })
       .expect(200);
 
     assert.ok(checkout.body.order._id);
+    assert.equal(checkout.body.order.paymentMethod, 'upi');
+    assert.equal(checkout.body.order.paymentStatus, 'paid');
+    assert.equal(checkout.body.order.shippingAddress.city, 'Pune');
 
     const review = await request(app)
       .post(`/api/violet/reviews/product/${cartProductId}`)

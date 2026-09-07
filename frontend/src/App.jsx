@@ -4,6 +4,7 @@ import BottomNav from './components/BottomNav';
 import Header from './components/Header';
 import CartPage from './pages/CartPage';
 import CatalogPage from './pages/CatalogPage';
+import CheckoutPage from './pages/CheckoutPage';
 import FavoritesPage from './pages/FavoritesPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -113,6 +114,14 @@ function Shell() {
             element={
               <RequireAuth>
                 <CartPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <RequireAuth>
+                <CheckoutPage />
               </RequireAuth>
             }
           />

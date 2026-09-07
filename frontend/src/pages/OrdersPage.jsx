@@ -84,6 +84,28 @@ export default function OrdersPage() {
                 </li>
               ))}
             </ul>
+            {order.shippingAddress?.line1 ? (
+              <p className="order-note">
+                Ship to:{' '}
+                {[
+                  order.shippingAddress.line1,
+                  order.shippingAddress.line2,
+                  order.shippingAddress.city,
+                  order.shippingAddress.state,
+                  order.shippingAddress.country,
+                  order.shippingAddress.pincode,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </p>
+            ) : null}
+            {order.paymentMethod ? (
+              <p className="order-note">
+                Paid via {String(order.paymentMethod).toUpperCase()}
+                {order.paymentStatus ? ` · ${order.paymentStatus}` : ''}
+                {order.paymentRef ? ` · ${order.paymentRef}` : ''}
+              </p>
+            ) : null}
             {order.note ? <p className="order-note">Note: {order.note}</p> : null}
           </article>
         ))}
