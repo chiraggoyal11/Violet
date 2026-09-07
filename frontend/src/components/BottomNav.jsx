@@ -1,5 +1,13 @@
-import { NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { api } from '../api';
 import { useAuth } from '../AuthContext';
+
+const MSG_BADGE_REFRESH = 'violet:messages-badge-refresh';
+
+export function refreshMessageBadge() {
+  window.dispatchEvent(new Event(MSG_BADGE_REFRESH));
+}
 
 function Icon({ children }) {
   return (
@@ -97,6 +105,7 @@ const userLinks = [
   {
     to: '/messages',
     label: 'Messages',
+    badge: 'messages',
     icon: (
       <Icon>
         <path
@@ -109,23 +118,81 @@ const userLinks = [
 ];
 
 export default function BottomNav() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const location = useLocation();
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const links = user ? userLinks : guestLinks;
+
+  useEffect(() => {
+    if (!token) {
+      setUnreadMessages(0);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const data = await api.unreadMessageCount(token);
+        if (!cancelled) setUnreadMessages(Number(data.unread) || 0);
+      } catch {
+        /* ignore transient errors */
+      }
+    }
+
+    function onRefresh() {
+      poll();
+    }
+
+    poll();
+    const timer = setInterval(poll, 15000);
+    window.addEventListener(MSG_BADGE_REFRESH, onRefresh);
+    window.addEventListener('focus', onRefresh);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener(MSG_BADGE_REFRESH, onRefresh);
+      window.removeEventListener('focus', onRefresh);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    if (!location.pathname.startsWith('/messages')) return undefined;
+    // Opening inbox/thread marks messages read on the server; refresh soon after.
+    const t = setTimeout(() => refreshMessageBadge(), 400);
+    return () => clearTimeout(t);
+  }, [location.pathname, token]);
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
-      {links.map((link) => (
-        <NavLink
-          key={link.to}
-          to={link.to}
-          className={({ isActive }) =>
-            `bottom-nav-link${isActive ? ' active' : ''}`
-          }
-        >
-          <span className="bottom-nav-icon">{link.icon}</span>
-          <span className="bottom-nav-label">{link.label}</span>
-        </NavLink>
-      ))}
+      {links.map((link) => {
+        const showBadge = link.badge === 'messages' && unreadMessages > 0;
+        const ariaLabel = showBadge
+          ? `${link.label}, ${unreadMessages} unread`
+          : link.label;
+        return (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            className={({ isActive }) =>
+              `bottom-nav-link${isActive ? ' active' : ''}`
+            }
+            aria-label={ariaLabel}
+          >
+            <span className="bottom-nav-icon">
+              {link.icon}
+              {showBadge ? (
+                <span className="badge-count" aria-hidden="true">
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </span>
+              ) : null}
+            </span>
+            <span className="bottom-nav-label">{link.label}</span>
+          </NavLink>
+        );
+      })}
     </nav>
   );
 }

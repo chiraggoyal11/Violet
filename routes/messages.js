@@ -62,6 +62,25 @@ router.get('/', user_jwt, async (req, res) => {
   }
 });
 
+router.get('/unread-count', user_jwt, async (req, res) => {
+  try {
+    const userId = String(req.user.id);
+    const conversations = await Conversation.find({ participants: userId }).select('_id');
+    const conversationIds = conversations.map((c) => c._id);
+    const unread = conversationIds.length
+      ? await Message.countDocuments({
+          conversation_id: { $in: conversationIds },
+          sender_id: { $ne: userId },
+          readAt: null
+        })
+      : 0;
+    return res.status(200).json({ success: true, unread });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load unread count' });
+  }
+});
+
 router.get('/:id/messages', user_jwt, async (req, res) => {
   try {
     const userId = String(req.user.id);

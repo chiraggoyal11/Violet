@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import { refreshMessageBadge } from '../components/BottomNav';
 
 function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/);
@@ -108,6 +109,7 @@ export default function MessagesPage() {
   async function loadInbox() {
     const data = await api.listConversations(token);
     setConversations(data.conversations || []);
+    refreshMessageBadge();
   }
 
   async function loadThread(conversationId, { silent = false } = {}) {

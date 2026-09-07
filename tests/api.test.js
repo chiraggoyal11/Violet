@@ -374,6 +374,12 @@ describe('Violet API', () => {
     assert.ok(sent.body.conversation._id);
     conversationId = sent.body.conversation._id;
 
+    const unreadBefore = await request(app)
+      .get('/api/violet/messages/unread-count')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    assert.ok(unreadBefore.body.unread >= 1);
+
     const notes = await request(app)
       .get('/api/violet/notifications')
       .set('Authorization', `Bearer ${token}`)
