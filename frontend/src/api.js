@@ -235,6 +235,13 @@ export const api = {
       body: typeof payload === 'string' ? { note: payload } : payload,
       token,
     }),
+  paymentConfig: (token) => request(ORDER_BASE, '/payments/config', { token }),
+  confirmPayment: (orderId, payload, token) =>
+    request(ORDER_BASE, `/${orderId}/confirm-payment`, {
+      method: 'POST',
+      body: payload,
+      token,
+    }),
   listOrders: (token) => request(ORDER_BASE, '/', { token }),
   listSales: (token) => request(ORDER_BASE, '/sales', { token }),
 

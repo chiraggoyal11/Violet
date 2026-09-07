@@ -40,7 +40,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['card', 'upi', ''],
+      enum: ['card', 'upi', 'cod', ''],
       default: ''
     },
     paymentStatus: {
@@ -49,7 +49,10 @@ const orderSchema = new mongoose.Schema(
       default: 'pending'
     },
     paymentRef: { type: String, trim: true, default: '' },
-    paymentProvider: { type: String, trim: true, default: 'demo' }
+    paymentProvider: { type: String, trim: true, default: 'demo' },
+    paymentDetail: { type: String, trim: true, default: '' },
+    paidAt: { type: Date, default: null },
+    razorpayOrderId: { type: String, trim: true, default: '' }
   },
   { timestamps: true }
 );

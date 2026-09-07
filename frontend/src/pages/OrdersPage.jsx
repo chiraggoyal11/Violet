@@ -101,9 +101,11 @@ export default function OrdersPage() {
             ) : null}
             {order.paymentMethod ? (
               <p className="order-note">
-                Paid via {String(order.paymentMethod).toUpperCase()}
+                {order.paymentMethod === 'cod' ? 'Cash on delivery' : `Paid via ${String(order.paymentMethod).toUpperCase()}`}
                 {order.paymentStatus ? ` · ${order.paymentStatus}` : ''}
+                {order.paymentDetail ? ` · ${order.paymentDetail}` : ''}
                 {order.paymentRef ? ` · ${order.paymentRef}` : ''}
+                {order.paymentProvider ? ` · ${order.paymentProvider}` : ''}
               </p>
             ) : null}
             {order.note ? <p className="order-note">Note: {order.note}</p> : null}
