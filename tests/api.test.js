@@ -289,6 +289,25 @@ describe('Violet API', () => {
     assert.equal(profile.body.user.address.city, 'Pune');
     assert.equal(profile.body.user.address.pincode, '411001');
 
+    const incomplete = await request(app)
+      .put('/api/violet/auth/profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        username: 'UpdatedMaker',
+        address: {
+          line1: '',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        }
+      })
+      .expect(400);
+    assert.match(
+      String(incomplete.body.msg || ''),
+      /line 1|shipping address/i
+    );
+
     const settings = await request(app)
       .put('/api/violet/auth/settings')
       .set('Authorization', `Bearer ${token}`)

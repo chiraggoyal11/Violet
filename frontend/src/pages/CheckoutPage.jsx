@@ -78,7 +78,6 @@ export default function CheckoutPage() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const profileAddress = user?.address || emptyAddress;
-  const useProfileDefault = user?.settings?.useProfileAddressAtCheckout !== false;
   const profileReady = hasProfileAddress(profileAddress);
 
   useEffect(() => {
@@ -120,13 +119,16 @@ export default function CheckoutPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || addressTouchedRef.current) return;
+    if (!user) return;
+    if (addressTouchedRef.current) return;
+
     const fromProfile = user.address || emptyAddress;
     const useDefault = user.settings?.useProfileAddressAtCheckout !== false;
 
     if (useDefault && hasAnyAddressField(fromProfile)) {
       const seeded = { ...emptyAddress, ...fromProfile };
       setAddress(seeded);
+      // Incomplete profile data stays in the form — never wipe to blank.
       setEditingAddress(!hasProfileAddress(seeded));
     } else {
       setAddress(emptyAddress);
