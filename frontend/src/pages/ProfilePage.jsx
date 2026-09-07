@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api';
+import AddressFields from '../components/AddressFields';
+import { isValidPincode } from '../data/geoAddress';
 import { formatPhoneDisplay } from '../utils/validation';
 import { useAuth } from '../AuthContext';
 
@@ -46,10 +48,10 @@ export default function ProfilePage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function setAddress(key, value) {
+  function patchAddress(updates) {
     setForm((prev) => ({
       ...prev,
-      address: { ...prev.address, [key]: value },
+      address: { ...prev.address, ...updates },
     }));
   }
 
@@ -82,6 +84,13 @@ export default function ProfilePage() {
     setError('');
     setOk('');
     try {
+      const addr = form.address || {};
+      const hasAnyAddress = Boolean(
+        addr.line1 || addr.line2 || addr.city || addr.state || addr.country || addr.pincode,
+      );
+      if (hasAnyAddress && addr.pincode && !isValidPincode(addr.pincode)) {
+        throw new Error('Pincode must be exactly 6 digits.');
+      }
       const data = await api.updateProfile(
         {
           username: form.username.trim(),
@@ -205,62 +214,11 @@ export default function ProfilePage() {
 
           <fieldset className="form-section">
             <legend>Shipping address</legend>
-            <div className="form-grid">
-              <div className="form-field">
-                <label htmlFor="line1">Address line 1</label>
-                <input
-                  id="line1"
-                  value={form.address.line1}
-                  onChange={(e) => setAddress('line1', e.target.value)}
-                  autoComplete="address-line1"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="line2">Address line 2</label>
-                <input
-                  id="line2"
-                  value={form.address.line2}
-                  onChange={(e) => setAddress('line2', e.target.value)}
-                  autoComplete="address-line2"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="city">City</label>
-                <input
-                  id="city"
-                  value={form.address.city}
-                  onChange={(e) => setAddress('city', e.target.value)}
-                  autoComplete="address-level2"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="state">State</label>
-                <input
-                  id="state"
-                  value={form.address.state}
-                  onChange={(e) => setAddress('state', e.target.value)}
-                  autoComplete="address-level1"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="country">Country</label>
-                <input
-                  id="country"
-                  value={form.address.country}
-                  onChange={(e) => setAddress('country', e.target.value)}
-                  autoComplete="country-name"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="pincode">Pincode</label>
-                <input
-                  id="pincode"
-                  value={form.address.pincode}
-                  onChange={(e) => setAddress('pincode', e.target.value)}
-                  autoComplete="postal-code"
-                />
-              </div>
-            </div>
+            <AddressFields
+              address={form.address}
+              onChange={patchAddress}
+              idPrefix="profile"
+            />
           </fieldset>
 
           {error ? <p className="status error">{error}</p> : null}
