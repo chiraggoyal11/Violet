@@ -60,6 +60,29 @@ function normalizeAddress(raw = {}) {
     };
 }
 
+function addressHasAnyField(address) {
+    if (!address) return false;
+    return Boolean(
+        address.line1 ||
+            address.line2 ||
+            address.city ||
+            address.state ||
+            address.country ||
+            address.pincode
+    );
+}
+
+function addressIsComplete(address) {
+    if (!address) return false;
+    return Boolean(
+        address.line1 &&
+            address.city &&
+            address.state &&
+            address.country &&
+            /^\d{6}$/.test(address.pincode)
+    );
+}
+
 function normalizeSettings(raw = {}, current = {}) {
     const base = {
         orderUpdates: true,
@@ -277,7 +300,14 @@ router.put('/profile', user_jwt, async (req, res) => {
         if (gender !== undefined) user.gender = gender;
         if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
         if (req.body.address !== undefined) {
-            user.address = normalizeAddress(req.body.address || {});
+            const nextAddress = normalizeAddress(req.body.address || {});
+            if (addressHasAnyField(nextAddress) && !addressIsComplete(nextAddress)) {
+                return res.status(400).json({
+                    success: false,
+                    msg: 'Shipping address needs line 1, city, state, country, and a 6-digit pincode'
+                });
+            }
+            user.address = nextAddress;
         }
         await user.save();
 
