@@ -236,6 +236,13 @@ export const api = {
       token,
     }),
   paymentConfig: (token) => request(ORDER_BASE, '/payments/config', { token }),
+  paymentStatus: (orderId, token) =>
+    request(ORDER_BASE, `/${orderId}/payment-status`, { token }),
+  cancelPayment: (orderId, token) =>
+    request(ORDER_BASE, `/${orderId}/cancel-payment`, {
+      method: 'POST',
+      token,
+    }),
   confirmPayment: (orderId, payload, token) =>
     request(ORDER_BASE, `/${orderId}/confirm-payment`, {
       method: 'POST',

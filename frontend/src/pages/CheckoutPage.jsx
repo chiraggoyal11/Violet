@@ -59,8 +59,10 @@ export default function CheckoutPage() {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [payConfig, setPayConfig] = useState(null);
-  const [payPhase, setPayPhase] = useState('form'); // form | processing | success
+  const [payPhase, setPayPhase] = useState('form'); // form | processing | awaiting_upi | success | failed
   const [receipt, setReceipt] = useState(null);
+  const [pendingOrderId, setPendingOrderId] = useState('');
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const profileAddress = user?.address || emptyAddress;
   const useProfileDefault = user?.settings?.useProfileAddressAtCheckout !== false;
@@ -122,6 +124,82 @@ export default function CheckoutPage() {
       ),
     [address],
   );
+
+  useEffect(() => {
+    if (payPhase !== 'awaiting_upi' || !pendingOrderId || !token) return undefined;
+
+    let cancelled = false;
+    const tick = window.setInterval(() => {
+      setRemainingSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
+
+    const poll = window.setInterval(async () => {
+      try {
+        const data = await api.paymentStatus(pendingOrderId, token);
+        if (cancelled) return;
+        const status = data.payment?.status || data.order?.paymentStatus;
+        if (typeof data.payment?.remainingSeconds === 'number') {
+          setRemainingSeconds(data.payment.remainingSeconds);
+        }
+        if (status === 'paid') {
+          setReceipt((prev) => ({
+            ...prev,
+            orderId: data.order._id,
+            status: 'paid',
+            method: data.order.paymentMethod,
+            ref: data.payment?.ref || data.order.paymentRef,
+            provider: data.payment?.provider || data.order.paymentProvider,
+            detail: data.payment?.detail || data.order.paymentDetail,
+            amount: data.order.total,
+          }));
+          setPayPhase('success');
+        } else if (status === 'failed') {
+          setPayPhase('failed');
+          setError('Payment was not completed in time. Please try again.');
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+      window.clearInterval(poll);
+    };
+  }, [payPhase, pendingOrderId, token]);
+
+  useEffect(() => {
+    if (payPhase !== 'awaiting_upi' || remainingSeconds > 0 || !pendingOrderId || !token) {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.paymentStatus(pendingOrderId, token);
+        if (cancelled) return;
+        if (data.payment?.status === 'paid') {
+          setReceipt((prev) => ({
+            ...prev,
+            status: 'paid',
+            ref: data.payment?.ref || data.order.paymentRef,
+          }));
+          setPayPhase('success');
+        } else {
+          setPayPhase('failed');
+          setError('Payment timed out after 5 minutes. Order was cancelled.');
+        }
+      } catch {
+        if (!cancelled) {
+          setPayPhase('failed');
+          setError('Payment timed out after 5 minutes. Order was cancelled.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [remainingSeconds, payPhase, pendingOrderId, token]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
@@ -209,6 +287,28 @@ export default function CheckoutPage() {
         return;
       }
 
+      if (data.action === 'awaiting_upi') {
+        setPendingOrderId(data.order._id);
+        setRemainingSeconds(
+          Number(data.payment?.remainingSeconds) ||
+            Number(payConfig?.upiTimeoutSeconds) ||
+            300,
+        );
+        setReceipt({
+          orderId: data.order._id,
+          status: 'pending',
+          method: 'upi',
+          ref: data.payment?.ref || data.order.paymentRef,
+          provider: data.payment?.provider || data.order.paymentProvider,
+          detail: data.payment?.detail || data.order.paymentDetail,
+          amount: data.order.total,
+          expiresAt: data.payment?.expiresAt,
+        });
+        setPayPhase('awaiting_upi');
+        setItems([]);
+        return;
+      }
+
       setReceipt({
         orderId: data.order._id,
         status: data.payment?.status || data.order.paymentStatus,
@@ -228,12 +328,41 @@ export default function CheckoutPage() {
     }
   }
 
+  async function cancelUpiPayment() {
+    if (!pendingOrderId) return;
+    setBusy(true);
+    try {
+      await api.cancelPayment(pendingOrderId, token);
+      setPayPhase('failed');
+      setError('Payment cancelled. You can try again from cart.');
+    } catch (err) {
+      setError(err.message || 'Could not cancel payment');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function formatTimer(totalSec) {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
   function goToOrders() {
-    if (receipt?.orderId) {
+    if (receipt?.orderId && payPhase === 'success') {
       navigate(`/orders?placed=${receipt.orderId}`, { replace: true });
     } else {
       navigate('/orders', { replace: true });
     }
+  }
+
+  function retryPayment() {
+    setError('');
+    setPayPhase('form');
+    setPendingOrderId('');
+    setReceipt(null);
+    setRemainingSeconds(0);
+    navigate('/cart', { replace: true });
   }
 
   if (loading) {
@@ -299,6 +428,89 @@ export default function CheckoutPage() {
             <div className="form-actions">
               <button type="button" className="btn btn-accent" onClick={goToOrders}>
                 View order
+              </button>
+              <Link className="btn btn-secondary" to="/catalog">
+                Keep shopping
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (payPhase === 'awaiting_upi') {
+    const urgent = remainingSeconds <= 60;
+    return (
+      <section className="section checkout-section">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Checkout</p>
+            <h2>Complete your order</h2>
+          </div>
+        </div>
+        <div className="panel wide checkout-panel">
+          <div className="payment-awaiting-upi">
+            <div className="payment-spinner" aria-hidden="true" />
+            <h3>Waiting for UPI payment</h3>
+            <p className="lede">
+              Open your UPI app and approve the payment request for{' '}
+              <strong>{formatPrice(receipt?.amount || total)}</strong>
+              {receipt?.detail ? (
+                <>
+                  {' '}
+                  from <strong>{receipt.detail}</strong>
+                </>
+              ) : null}
+              . If you do not complete it in time, the payment will fail and the
+              order will be cancelled.
+            </p>
+            <div
+              className={`payment-timer${urgent ? ' urgent' : ''}`}
+              role="timer"
+              aria-live="polite"
+              aria-label={`${remainingSeconds} seconds remaining`}
+            >
+              <span className="payment-timer-label">Time left</span>
+              <strong className="payment-timer-value">{formatTimer(remainingSeconds)}</strong>
+              <span className="payment-timer-hint">Expires in 5 minutes</span>
+            </div>
+            {error ? <p className="status error">{error}</p> : null}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={cancelUpiPayment}
+                disabled={busy}
+              >
+                Cancel payment
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (payPhase === 'failed') {
+    return (
+      <section className="section checkout-section">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Checkout</p>
+            <h2>Complete your order</h2>
+          </div>
+        </div>
+        <div className="panel wide checkout-panel">
+          <div className="payment-failed">
+            <h3>Payment failed</h3>
+            <p className="lede">
+              {error ||
+                'The UPI payment was not completed within 5 minutes. Your order was cancelled.'}
+            </p>
+            <div className="form-actions">
+              <button type="button" className="btn btn-accent" onClick={retryPayment}>
+                Back to cart
               </button>
               <Link className="btn btn-secondary" to="/catalog">
                 Keep shopping
@@ -502,7 +714,7 @@ export default function CheckoutPage() {
               <h3>Payment</h3>
               <p className="lede">
                 {payConfig?.demo !== false
-                  ? 'Pay with UPI, Card, or Cash on delivery. Demo mode confirms instantly — connect Razorpay keys for live Checkout.'
+                  ? 'Pay with UPI, Card, or Cash on delivery. UPI asks you to approve in your app within 5 minutes — otherwise payment fails.'
                   : 'Pay securely with Razorpay Checkout, or choose Cash on delivery.'}
               </p>
 

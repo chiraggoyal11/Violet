@@ -5,6 +5,9 @@ const request = require('supertest');
 
 process.env.jwtSecret = process.env.jwtSecret || 'test_jwt_secret';
 process.env.RESET_DEV_MODE = 'true';
+process.env.PAYMENT_MODE = 'demo';
+delete process.env.RAZORPAY_KEY_ID;
+delete process.env.RAZORPAY_KEY_SECRET;
 process.env.MONGO =
   process.env.MONGO_TEST || 'mongodb://127.0.0.1:27017/violet_test';
 process.env.BUCKET_NAME = 'violet-products';
@@ -441,12 +444,23 @@ describe('Violet API', () => {
       .expect(200);
 
     assert.ok(checkout.body.order._id);
-    assert.equal(checkout.body.action, 'captured');
+    assert.equal(checkout.body.action, 'awaiting_upi');
     assert.equal(checkout.body.order.paymentMethod, 'upi');
-    assert.equal(checkout.body.order.paymentStatus, 'paid');
+    assert.equal(checkout.body.order.paymentStatus, 'pending');
     assert.equal(checkout.body.order.paymentProvider, 'demo');
-    assert.ok(checkout.body.payment?.ref);
+    assert.ok(checkout.body.payment?.expiresAt);
+    assert.ok(checkout.body.payment?.remainingSeconds > 0);
     assert.equal(checkout.body.order.shippingAddress.city, 'Pune');
+
+    // Speed up demo UPI auto-confirm for this assertion
+    process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS = '1';
+    await new Promise((r) => setTimeout(r, 1200));
+    const paid = await request(app)
+      .get(`/api/violet/orders/${checkout.body.order._id}/payment-status`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(paid.body.order.paymentStatus, 'paid');
+    delete process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS;
 
     const review = await request(app)
       .post(`/api/violet/reviews/product/${cartProductId}`)

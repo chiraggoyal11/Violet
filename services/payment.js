@@ -8,6 +8,18 @@ const crypto = require('crypto');
 
 const METHODS = new Set(['card', 'upi', 'cod']);
 
+/** UPI collect request must be approved within this window. */
+const UPI_TIMEOUT_SECONDS = 5 * 60;
+/** Demo only: simulate phone approval after this delay (still shows 5‑min timer). */
+const DEMO_UPI_AUTO_CONFIRM_SECONDS = 12;
+
+function demoUpiAutoConfirmSeconds() {
+  const raw = env('PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS');
+  if (raw === '') return DEMO_UPI_AUTO_CONFIRM_SECONDS;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEMO_UPI_AUTO_CONFIRM_SECONDS;
+}
+
 function env(name, fallback = '') {
   return String(process.env[name] || fallback).trim();
 }
@@ -31,6 +43,8 @@ function getPublicConfig() {
     razorpayKeyId: mode === 'razorpay' ? env('RAZORPAY_KEY_ID') : '',
     currency: 'INR',
     demo: mode === 'demo',
+    upiTimeoutSeconds: UPI_TIMEOUT_SECONDS,
+    demoUpiAutoConfirmSeconds: demoUpiAutoConfirmSeconds(),
   };
 }
 
@@ -108,6 +122,25 @@ async function chargeDemo({ amount, method, payCheck }) {
       amount: Number(amount).toFixed(2),
       currency: 'INR',
       paidAt: null,
+    };
+  }
+
+  // UPI: start a collect request — buyer must approve within the timeout.
+  if (method === 'upi') {
+    const expiresAt = new Date(Date.now() + UPI_TIMEOUT_SECONDS * 1000);
+    return {
+      ok: true,
+      provider: 'demo',
+      status: 'pending',
+      action: 'awaiting_upi',
+      ref: makeRef('upi_collect'),
+      detail: payCheck.detail,
+      masked: payCheck.masked,
+      amount: Number(amount).toFixed(2),
+      currency: 'INR',
+      paidAt: null,
+      expiresAt,
+      timeoutSeconds: UPI_TIMEOUT_SECONDS,
     };
   }
 
@@ -208,6 +241,9 @@ async function processCheckoutPayment({
     method: payCheck.method,
     payCheck,
   });
+  if (charged.action === 'awaiting_upi') {
+    return { ok: true, action: 'awaiting_upi', payCheck, ...charged };
+  }
   return { ok: true, action: 'captured', payCheck, ...charged };
 }
 
@@ -218,4 +254,7 @@ module.exports = {
   processCheckoutPayment,
   verifyRazorpaySignature,
   razorpayConfigured,
+  UPI_TIMEOUT_SECONDS,
+  DEMO_UPI_AUTO_CONFIRM_SECONDS,
+  demoUpiAutoConfirmSeconds,
 };

@@ -52,6 +52,7 @@ const orderSchema = new mongoose.Schema(
     paymentProvider: { type: String, trim: true, default: 'demo' },
     paymentDetail: { type: String, trim: true, default: '' },
     paidAt: { type: Date, default: null },
+    paymentExpiresAt: { type: Date, default: null },
     razorpayOrderId: { type: String, trim: true, default: '' }
   },
   { timestamps: true }

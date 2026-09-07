@@ -10,6 +10,8 @@ const {
   getPublicConfig,
   processCheckoutPayment,
   verifyRazorpaySignature,
+  DEMO_UPI_AUTO_CONFIRM_SECONDS,
+  demoUpiAutoConfirmSeconds,
 } = require('../services/payment');
 
 function normalizeAddress(input = {}) {
@@ -110,6 +112,89 @@ async function notifySellers(orderItems, buyerId) {
   );
 }
 
+async function restoreStock(orderItems) {
+  for (const item of orderItems) {
+    await Product.findByIdAndUpdate(item.product_id, {
+      $inc: { stock: item.quantity },
+      $set: { status: 'active' },
+    });
+  }
+}
+
+async function failPendingPaymentOrder(order) {
+  if (order.paymentStatus !== 'pending') {
+    return order;
+  }
+  // COD stays pending until delivery — do not auto-fail here.
+  if (order.paymentMethod === 'cod') {
+    return order;
+  }
+  order.paymentStatus = 'failed';
+  order.status = 'cancelled';
+  await order.save();
+  await restoreStock(order.items);
+  return order;
+}
+
+/**
+ * Resolve demo UPI collect: expire, or auto-confirm after short delay.
+ */
+async function resolveUpiPayment(order) {
+  if (
+    !order ||
+    order.paymentMethod !== 'upi' ||
+    order.paymentStatus !== 'pending' ||
+    order.paymentProvider === 'razorpay'
+  ) {
+    return order;
+  }
+
+  const now = Date.now();
+  const expiresAt = order.paymentExpiresAt
+    ? new Date(order.paymentExpiresAt).getTime()
+    : 0;
+
+  if (expiresAt && now >= expiresAt) {
+    return failPendingPaymentOrder(order);
+  }
+
+  // Demo: simulate UPI app approval after a short delay.
+  if (order.paymentProvider === 'demo') {
+    const created = new Date(order.createdAt || order._id.getTimestamp()).getTime();
+    if (now - created >= demoUpiAutoConfirmSeconds() * 1000) {
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+      if (!order.paymentRef) {
+        order.paymentRef = `upi_paid_${Date.now().toString(36)}`;
+      }
+      await order.save();
+      await notifySellers(order.items, order.buyer_id);
+    }
+  }
+
+  return order;
+}
+
+function paymentPayload(order) {
+  const expiresAt = order.paymentExpiresAt
+    ? new Date(order.paymentExpiresAt).toISOString()
+    : null;
+  const remainingMs = expiresAt
+    ? Math.max(0, new Date(expiresAt).getTime() - Date.now())
+    : 0;
+  return {
+    status: order.paymentStatus,
+    method: order.paymentMethod,
+    detail: order.paymentDetail,
+    provider: order.paymentProvider,
+    ref: order.paymentRef,
+    amount: order.total,
+    currency: 'INR',
+    expiresAt,
+    remainingSeconds: Math.ceil(remainingMs / 1000),
+  };
+}
+
 router.get('/payments/config', user_jwt, (req, res) => {
   return res.status(200).json({ success: true, payment: getPublicConfig() });
 });
@@ -205,6 +290,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentProvider: 'razorpay',
         paymentDetail: payResult.payCheck.masked || '',
         razorpayOrderId: payResult.razorpayOrderId,
+        paymentExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
       });
 
       cart.items = [];
@@ -223,6 +309,33 @@ router.post('/checkout', user_jwt, async (req, res) => {
           name: 'Violet',
           description: `Order #${String(order._id).slice(-6)}`,
         },
+      });
+    }
+
+    if (payResult.action === 'awaiting_upi') {
+      const order = await Order.create({
+        buyer_id: req.user.id,
+        items: orderItems,
+        total: amount,
+        note,
+        shippingAddress,
+        paymentMethod: 'upi',
+        paymentStatus: 'pending',
+        paymentRef: payResult.ref,
+        paymentProvider: payResult.provider,
+        paymentDetail: payResult.masked || payResult.detail || '',
+        paymentExpiresAt: payResult.expiresAt,
+      });
+
+      cart.items = [];
+      await cart.save();
+
+      return res.status(200).json({
+        success: true,
+        msg: 'Approve the UPI payment request within 5 minutes',
+        action: 'awaiting_upi',
+        order,
+        payment: paymentPayload(order),
       });
     }
 
@@ -264,6 +377,51 @@ router.post('/checkout', user_jwt, async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ success: false, msg: 'Checkout failed' });
+  }
+});
+
+/** Poll UPI / pending payment status (also expires or auto-confirms demo UPI). */
+router.get('/:id/payment-status', user_jwt, async (req, res) => {
+  try {
+    let order = await Order.findById(req.params.id);
+    if (!order || String(order.buyer_id) !== String(req.user.id)) {
+      return res.status(404).json({ success: false, msg: 'Order not found' });
+    }
+    order = await resolveUpiPayment(order);
+    return res.status(200).json({
+      success: true,
+      order,
+      payment: paymentPayload(order),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load payment status' });
+  }
+});
+
+/** Cancel a pending UPI collect before the timer ends. */
+router.post('/:id/cancel-payment', user_jwt, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order || String(order.buyer_id) !== String(req.user.id)) {
+      return res.status(404).json({ success: false, msg: 'Order not found' });
+    }
+    if (order.paymentStatus === 'paid') {
+      return res.status(400).json({ success: false, msg: 'Payment already completed' });
+    }
+    if (order.paymentStatus === 'failed') {
+      return res.status(200).json({ success: true, msg: 'Already cancelled', order });
+    }
+    await failPendingPaymentOrder(order);
+    return res.status(200).json({
+      success: true,
+      msg: 'Payment cancelled',
+      order,
+      payment: paymentPayload(order),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Could not cancel payment' });
   }
 });
 
