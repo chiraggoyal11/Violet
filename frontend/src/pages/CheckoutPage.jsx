@@ -62,6 +62,12 @@ export default function CheckoutPage() {
   const useProfileDefault = user?.settings?.useProfileAddressAtCheckout !== false;
   const profileReady = hasProfileAddress(profileAddress);
 
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H2',location:'CheckoutPage.jsx:mount-user',message:'checkout user.address on mount/update',data:{hasUser:Boolean(user),rawAddress:user?.address||null,profileAddress,profileReady,useProfileDefault,line1:user?.address?.line1||null,city:user?.address?.city||null,state:user?.address?.state||null,country:user?.address?.country||null,pincode:user?.address?.pincode||null,pincodeValid:isValidPincode(user?.address?.pincode),addressKeys:Object.keys(user?.address||{}),hasOwnLine1:Boolean(user?.address&&Object.prototype.hasOwnProperty.call(user.address,'line1'))},timestamp:Date.now()})}).catch(()=>{});
+  }, [user]);
+  // #endregion
+
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -95,13 +101,26 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!user) return;
     if (useProfileDefault && profileReady) {
-      setAddress({ ...emptyAddress, ...profileAddress });
+      const seeded = { ...emptyAddress, ...profileAddress };
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H2',location:'CheckoutPage.jsx:seedEffect:ready',message:'seeding profile address into checkout',data:{branch:'profileReady',profileReady,useProfileDefault,profileAddress,seeded,seededLine1:seeded.line1||null,editingAddressNext:false},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setAddress(seeded);
       setEditingAddress(false);
     } else {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H2',location:'CheckoutPage.jsx:seedEffect:clear',message:'clearing checkout address (profile not ready)',data:{branch:'clear',profileReady,useProfileDefault,profileAddress,checks:{line1:Boolean(profileAddress?.line1),city:Boolean(profileAddress?.city),state:Boolean(profileAddress?.state),country:Boolean(profileAddress?.country),pincodeValid:isValidPincode(profileAddress?.pincode)},editingAddressNext:true},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setAddress(emptyAddress);
       setEditingAddress(true);
     }
   }, [user]);
+
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H3',location:'CheckoutPage.jsx:address-state',message:'checkout address state after update',data:{address,editingAddress,addressComplete:Boolean(address.line1?.trim()&&address.city?.trim()&&address.state?.trim()&&address.country?.trim()&&isValidPincode(address.pincode)),profileReady,line1Empty:!address.line1,willShowEditForm:editingAddress||!Boolean(address.line1?.trim()&&address.city?.trim()&&address.state?.trim()&&address.country?.trim()&&isValidPincode(address.pincode))},timestamp:Date.now()})}).catch(()=>{});
+  }, [address, editingAddress, profileReady]);
+  // #endregion
 
   const addressComplete = useMemo(
     () =>
@@ -126,6 +145,9 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError('');
     if (!addressComplete) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H3',location:'CheckoutPage.jsx:continueFromAddress:fail',message:'continueFromAddress validation failed',data:{address,addressComplete,line1:address.line1||'',city:address.city||'',state:address.state||'',country:address.country||'',pincode:address.pincode||'',pincodeValid:isValidPincode(address.pincode),editingAddress,profileReady},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setError(
         isValidPincode(address.pincode)
           ? 'Add a complete shipping address to continue.'
@@ -134,6 +156,9 @@ export default function CheckoutPage() {
       setEditingAddress(true);
       return;
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H3',location:'CheckoutPage.jsx:continueFromAddress:ok',message:'continueFromAddress passed',data:{address,editingAddress},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setEditingAddress(false);
     setStep('review');
   }

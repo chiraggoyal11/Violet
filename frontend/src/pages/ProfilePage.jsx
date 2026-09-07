@@ -91,6 +91,9 @@ export default function ProfilePage() {
       if (hasAnyAddress && addr.pincode && !isValidPincode(addr.pincode)) {
         throw new Error('Pincode must be exactly 6 digits.');
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H1',location:'ProfilePage.jsx:onSubmit:before',message:'profile save payload address',data:{formAddress:form.address,formLine1:form.address?.line1||null,formKeys:Object.keys(form.address||{})},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const data = await api.updateProfile(
         {
           username: form.username.trim(),
@@ -104,6 +107,9 @@ export default function ProfilePage() {
         token,
       );
       if (!data.success) throw new Error(data.msg || 'Update failed');
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H1',location:'ProfilePage.jsx:onSubmit:response',message:'profile save response address',data:{success:data.success,respAddress:data.user?.address||null,respLine1:data.user?.address?.line1||null,respKeys:Object.keys(data.user?.address||{}),hasLine1:Boolean(data.user?.address?.line1)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setUserSession(token, data.user);
       setOk('Profile updated.');
     } catch (err) {

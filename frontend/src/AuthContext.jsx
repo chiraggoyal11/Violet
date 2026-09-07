@@ -50,6 +50,9 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => {
     function persist(nextToken, nextUser) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H1',location:'AuthContext.jsx:persist',message:'persist user address',data:{hasUser:Boolean(nextUser),address:nextUser?.address||null,line1:nextUser?.address?.line1||null,addressKeys:Object.keys(nextUser?.address||{}),addressType:nextUser?.address==null?'null':typeof nextUser.address},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setToken(nextToken);
       setUser(nextUser);
       localStorage.setItem(

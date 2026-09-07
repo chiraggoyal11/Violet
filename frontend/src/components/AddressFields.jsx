@@ -26,13 +26,23 @@ export default function AddressFields({
       ? [address.country, ...ADDRESS_COUNTRIES]
       : ADDRESS_COUNTRIES;
 
+  // #region agent log
+  if (required && !(address.line1 || '').trim()) {
+    fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H3',location:'AddressFields.jsx:render',message:'required AddressFields render with empty line1 (HTML5 will block)',data:{idPrefix,required,line1:address.line1||'',city:address.city||'',state:address.state||'',country:address.country||'',pincode:address.pincode||''},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
+
   function onCountryChange(value) {
     const nextStates = statesForCountry(value);
     const keepState = Boolean(address.state && nextStates.includes(address.state));
-    onChange({
+    const patch = {
       country: value,
       state: keepState ? address.state : '',
-    });
+    };
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/9c1d7e4a-f4ce-41e3-a9d5-5fcd9f0e2a1b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c7a1'},body:JSON.stringify({sessionId:'c7a1',hypothesisId:'H5',location:'AddressFields.jsx:onCountryChange',message:'country change patch (does not include line1)',data:{idPrefix,required,prevCountry:address.country||'',nextCountry:value,prevState:address.state||'',keepState,patch,prevLine1:address.line1||null,prevAddress:address},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    onChange(patch);
   }
 
   return (
