@@ -110,7 +110,9 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, updateLocalUser]);
+    // updateLocalUser is stable enough for a one-shot refresh; including it retriggers
+    // loading forever when AuthContext recreates the callback after setUser.
+  }, [token]);
 
   useEffect(() => {
     const defaultNote = user?.settings?.defaultCheckoutNote;
