@@ -7,6 +7,64 @@ const User = require('../models/user');
 const user_jwt = require('../middleware/user_jwt');
 const { notifyUser } = require('../utils/notifications');
 
+function normalizeAddress(input = {}) {
+  return {
+    line1: String(input.line1 || '').trim(),
+    line2: String(input.line2 || '').trim(),
+    city: String(input.city || '').trim(),
+    state: String(input.state || '').trim(),
+    country: String(input.country || '').trim(),
+    pincode: String(input.pincode || '').trim()
+  };
+}
+
+function addressValid(address) {
+  return Boolean(
+    address.line1 &&
+      address.city &&
+      address.state &&
+      address.country &&
+      address.pincode
+  );
+}
+
+function validatePayment(method, payment = {}) {
+  const m = String(method || '').toLowerCase();
+  if (m !== 'card' && m !== 'upi') {
+    return { ok: false, msg: 'Choose Card or UPI payment' };
+  }
+
+  if (m === 'upi') {
+    const vpa = String(payment.upiId || '').trim().toLowerCase();
+    if (!/^[a-z0-9.\-_]{2,}@[a-z]{2,}$/i.test(vpa)) {
+      return { ok: false, msg: 'Enter a valid UPI ID (example: name@upi)' };
+    }
+    return { ok: true, method: 'upi', detail: vpa };
+  }
+
+  const number = String(payment.cardNumber || '').replace(/\s+/g, '');
+  const name = String(payment.cardName || '').trim();
+  const expiry = String(payment.cardExpiry || '').trim();
+  const cvv = String(payment.cardCvv || '').trim();
+  if (!/^\d{13,19}$/.test(number)) {
+    return { ok: false, msg: 'Enter a valid card number' };
+  }
+  if (!name || name.length < 2) {
+    return { ok: false, msg: 'Enter the name on the card' };
+  }
+  if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
+    return { ok: false, msg: 'Enter expiry as MM/YY' };
+  }
+  if (!/^\d{3,4}$/.test(cvv)) {
+    return { ok: false, msg: 'Enter a valid CVV' };
+  }
+  return {
+    ok: true,
+    method: 'card',
+    detail: `•••• ${number.slice(-4)}`
+  };
+}
+
 router.get('/', user_jwt, async (req, res) => {
   try {
     const orders = await Order.find({ buyer_id: req.user.id }).sort({ _id: -1 });
@@ -40,6 +98,22 @@ router.get('/sales', user_jwt, async (req, res) => {
 router.post('/checkout', user_jwt, async (req, res) => {
   try {
     const note = (req.body.note || '').trim();
+    const shippingAddress = normalizeAddress(req.body.shippingAddress || req.body.address);
+    const paymentMethod = String(req.body.paymentMethod || '').toLowerCase();
+    const payment = req.body.payment || {};
+
+    if (!addressValid(shippingAddress)) {
+      return res.status(400).json({
+        success: false,
+        msg: 'Shipping address needs line 1, city, state, country, and pincode'
+      });
+    }
+
+    const payCheck = validatePayment(paymentMethod, payment);
+    if (!payCheck.ok) {
+      return res.status(400).json({ success: false, msg: payCheck.msg });
+    }
+
     const cart = await Cart.findOne({ user_id: req.user.id });
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({ success: false, msg: 'Cart is empty' });
@@ -90,11 +164,20 @@ router.post('/checkout', user_jwt, async (req, res) => {
       });
     }
 
+    // Free demo payment confirmation (no merchant keys required).
+    // Swap this block for Razorpay/PhonePe when live keys are configured.
+    const paymentRef = `demo_${payCheck.method}_${Date.now().toString(36)}`;
+
     const order = await Order.create({
       buyer_id: req.user.id,
       items: orderItems,
       total: total.toFixed(2),
-      note
+      note,
+      shippingAddress,
+      paymentMethod: payCheck.method,
+      paymentStatus: 'paid',
+      paymentRef,
+      paymentProvider: 'demo'
     });
 
     cart.items = [];
@@ -108,7 +191,10 @@ router.post('/checkout', user_jwt, async (req, res) => {
           user_id: sellerId,
           type: 'order',
           title: 'New order received',
-          body: `${buyer?.username || 'A buyer'} ordered ${orderItems.filter((i) => String(i.seller_id) === sellerId).map((i) => i.Product_Name).join(', ')}`,
+          body: `${buyer?.username || 'A buyer'} ordered ${orderItems
+            .filter((i) => String(i.seller_id) === sellerId)
+            .map((i) => i.Product_Name)
+            .join(', ')}`,
           link: '/seller'
         })
       )
@@ -117,7 +203,14 @@ router.post('/checkout', user_jwt, async (req, res) => {
     return res.status(200).json({
       success: true,
       msg: 'Order placed',
-      order
+      order,
+      payment: {
+        status: 'paid',
+        method: payCheck.method,
+        detail: payCheck.detail,
+        provider: 'demo',
+        ref: paymentRef
+      }
     });
   } catch (error) {
     console.log(error);
