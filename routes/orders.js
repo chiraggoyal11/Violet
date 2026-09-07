@@ -14,7 +14,9 @@ function normalizeAddress(input = {}) {
     city: String(input.city || '').trim(),
     state: String(input.state || '').trim(),
     country: String(input.country || '').trim(),
-    pincode: String(input.pincode || '').trim()
+    pincode: String(input.pincode || '')
+      .replace(/\D/g, '')
+      .slice(0, 6)
   };
 }
 
@@ -24,7 +26,7 @@ function addressValid(address) {
       address.city &&
       address.state &&
       address.country &&
-      address.pincode
+      /^\d{6}$/.test(address.pincode)
   );
 }
 
@@ -105,7 +107,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
     if (!addressValid(shippingAddress)) {
       return res.status(400).json({
         success: false,
-        msg: 'Shipping address needs line 1, city, state, country, and pincode'
+        msg: 'Shipping address needs line 1, city, state, country, and a 6-digit pincode'
       });
     }
 

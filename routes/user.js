@@ -54,7 +54,9 @@ function normalizeAddress(raw = {}) {
         city: String(raw.city || '').trim(),
         state: String(raw.state || '').trim(),
         country: String(raw.country || '').trim(),
-        pincode: String(raw.pincode || '').trim()
+        pincode: String(raw.pincode || '')
+            .replace(/\D/g, '')
+            .slice(0, 6)
     };
 }
 

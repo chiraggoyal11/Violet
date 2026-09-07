@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import AddressFields from '../components/AddressFields';
 import { formatPrice } from '../components/ProductCard';
+import { isValidPincode } from '../data/geoAddress';
 
 const emptyAddress = {
   line1: '',
@@ -16,7 +18,11 @@ const emptyAddress = {
 function hasProfileAddress(address) {
   if (!address) return false;
   return Boolean(
-    address.line1 && address.city && address.state && address.country && address.pincode,
+    address.line1 &&
+      address.city &&
+      address.state &&
+      address.country &&
+      isValidPincode(address.pincode),
   );
 }
 
@@ -104,7 +110,7 @@ export default function CheckoutPage() {
           address.city?.trim() &&
           address.state?.trim() &&
           address.country?.trim() &&
-          address.pincode?.trim(),
+          isValidPincode(address.pincode),
       ),
     [address],
   );
@@ -112,15 +118,19 @@ export default function CheckoutPage() {
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
 
-  function setAddressField(key, value) {
-    setAddress((prev) => ({ ...prev, [key]: value }));
+  function patchAddress(updates) {
+    setAddress((prev) => ({ ...prev, ...updates }));
   }
 
   function continueFromAddress(e) {
     e.preventDefault();
     setError('');
     if (!addressComplete) {
-      setError('Add a complete shipping address to continue.');
+      setError(
+        isValidPincode(address.pincode)
+          ? 'Add a complete shipping address to continue.'
+          : 'Pincode must be exactly 6 digits.',
+      );
       setEditingAddress(true);
       return;
     }
@@ -244,67 +254,12 @@ export default function CheckoutPage() {
             </div>
           ) : (
             <>
-              <div className="form-grid">
-                <div className="form-field form-field-full">
-                  <label htmlFor="line1">Address line 1</label>
-                  <input
-                    id="line1"
-                    value={address.line1}
-                    onChange={(e) => setAddressField('line1', e.target.value)}
-                    required
-                    autoComplete="shipping address-line1"
-                  />
-                </div>
-                <div className="form-field form-field-full">
-                  <label htmlFor="line2">Address line 2</label>
-                  <input
-                    id="line2"
-                    value={address.line2}
-                    onChange={(e) => setAddressField('line2', e.target.value)}
-                    autoComplete="shipping address-line2"
-                  />
-                </div>
-                <div className="form-field">
-                  <label htmlFor="city">City</label>
-                  <input
-                    id="city"
-                    value={address.city}
-                    onChange={(e) => setAddressField('city', e.target.value)}
-                    required
-                    autoComplete="shipping address-level2"
-                  />
-                </div>
-                <div className="form-field">
-                  <label htmlFor="state">State</label>
-                  <input
-                    id="state"
-                    value={address.state}
-                    onChange={(e) => setAddressField('state', e.target.value)}
-                    required
-                    autoComplete="shipping address-level1"
-                  />
-                </div>
-                <div className="form-field">
-                  <label htmlFor="country">Country</label>
-                  <input
-                    id="country"
-                    value={address.country}
-                    onChange={(e) => setAddressField('country', e.target.value)}
-                    required
-                    autoComplete="shipping country-name"
-                  />
-                </div>
-                <div className="form-field">
-                  <label htmlFor="pincode">Pincode</label>
-                  <input
-                    id="pincode"
-                    value={address.pincode}
-                    onChange={(e) => setAddressField('pincode', e.target.value)}
-                    required
-                    autoComplete="shipping postal-code"
-                  />
-                </div>
-              </div>
+              <AddressFields
+                address={address}
+                onChange={patchAddress}
+                autoCompletePrefix="shipping"
+                required
+              />
               <div className="form-actions">
                 {profileReady ? (
                   <button
