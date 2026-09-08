@@ -19,6 +19,8 @@ export default function MinePage() {
     Price: '',
     category: 'Other',
     stock: 1,
+    images: [],
+    imageUrls: [],
   });
 
   async function loadProducts() {
@@ -44,15 +46,57 @@ export default function MinePage() {
 
   function startEdit(product) {
     setEditingId(product._id);
+    const images =
+      Array.isArray(product.Images) && product.Images.length
+        ? [...product.Images]
+        : product.Image
+          ? [product.Image]
+          : [];
     setDraft({
       Product_Name: product.Product_Name || '',
       Product_Detail: product.Product_Detail || '',
       Price: product.Price || '',
       category: product.category || 'Other',
       stock: product.stock ?? 1,
+      images,
+      imageUrls: product.ImageUrls || (product.ImageUrl ? [product.ImageUrl] : []),
     });
     setError('');
     setOk('');
+  }
+
+  async function moveImage(from, direction) {
+    const images = [...(draft.images || [])];
+    const urls = [...(draft.imageUrls || [])];
+    const to = from + direction;
+    if (to < 0 || to >= images.length) return;
+    [images[from], images[to]] = [images[to], images[from]];
+    if (urls.length === images.length) {
+      [urls[from], urls[to]] = [urls[to], urls[from]];
+    }
+    setDraft((d) => ({ ...d, images, imageUrls: urls }));
+  }
+
+  async function saveImageOrder() {
+    if (!editingId || !(draft.images || []).length) return;
+    setBusyId(editingId);
+    setError('');
+    try {
+      const data = await api.reorderProductImages(editingId, draft.images, token);
+      setProducts((prev) =>
+        prev.map((p) => (p._id === editingId ? { ...p, ...data.product } : p)),
+      );
+      setDraft((d) => ({
+        ...d,
+        images: data.product.Images || d.images,
+        imageUrls: data.product.ImageUrls || d.imageUrls,
+      }));
+      setOk('Image order saved.');
+    } catch (err) {
+      setError(err.message || 'Could not reorder images');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function saveEdit(e) {
@@ -199,6 +243,48 @@ export default function MinePage() {
                     }
                   />
                 </div>
+                {(draft.images || []).length > 1 ? (
+                  <div className="form-field">
+                    <span className="field-label">Photo order</span>
+                    <ul className="image-reorder-list">
+                      {(draft.images || []).map((key, idx) => (
+                        <li key={`${key}-${idx}`}>
+                          {draft.imageUrls?.[idx] ? (
+                            <img src={draft.imageUrls[idx]} alt="" />
+                          ) : (
+                            <span className="image-reorder-fallback">{idx + 1}</span>
+                          )}
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-compact"
+                              disabled={idx === 0}
+                              onClick={() => moveImage(idx, -1)}
+                            >
+                              Up
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-compact"
+                              disabled={idx === draft.images.length - 1}
+                              onClick={() => moveImage(idx, 1)}
+                            >
+                              Down
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busyId === product._id}
+                      onClick={saveImageOrder}
+                    >
+                      Save photo order
+                    </button>
+                  </div>
+                ) : null}
                 <div className="form-actions">
                   <button className="btn btn-accent" type="submit" disabled={busyId === product._id}>
                     Save

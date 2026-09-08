@@ -276,6 +276,10 @@ router.get('/sales', user_jwt, async (req, res) => {
       status: o.status,
       paymentStatus: o.paymentStatus,
       paymentMethod: o.paymentMethod,
+      trackingNumber: o.trackingNumber || '',
+      carrier: o.carrier || '',
+      returnRequest: o.returnRequest || null,
+      timeline: o.timeline || [],
       items: o.items.filter((i) => String(i.seller_id) === String(req.user.id)),
       total: o.items
         .filter((i) => String(i.seller_id) === String(req.user.id))
@@ -295,6 +299,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
     const shippingAddress = normalizeAddress(req.body.shippingAddress || req.body.address);
     const paymentMethod = String(req.body.paymentMethod || '').toLowerCase();
     const payment = req.body.payment || {};
+    const couponCode = String(req.body.couponCode || '').trim().toUpperCase();
 
     if (!addressValid(shippingAddress)) {
       return res.status(400).json({
@@ -328,7 +333,49 @@ router.post('/checkout', user_jwt, async (req, res) => {
     }
 
     const { orderItems, total } = reserved;
-    const amount = total.toFixed(2);
+    let chargeTotal = total;
+    let discount = 0;
+    let appliedCoupon = '';
+    if (couponCode) {
+      const Coupon = require('../models/coupon');
+      const { calcDiscount } = require('./coupons');
+      const coupon = await Coupon.findOne({ code: couponCode, active: true });
+      if (
+        !coupon ||
+        (coupon.expiresAt && coupon.expiresAt < new Date()) ||
+        (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses)
+      ) {
+        for (const item of orderItems) {
+          await Product.findByIdAndUpdate(item.product_id, {
+            $inc: { stock: item.quantity },
+            $set: { status: 'active' },
+          });
+        }
+        return res.status(400).json({ success: false, msg: 'Invalid or expired coupon' });
+      }
+      const priced = calcDiscount(coupon, total);
+      if (!priced.ok) {
+        for (const item of orderItems) {
+          await Product.findByIdAndUpdate(item.product_id, {
+            $inc: { stock: item.quantity },
+            $set: { status: 'active' },
+          });
+        }
+        return res.status(400).json({ success: false, msg: priced.msg });
+      }
+      discount = priced.discount;
+      chargeTotal = priced.total;
+      appliedCoupon = coupon.code;
+      coupon.usedCount = (coupon.usedCount || 0) + 1;
+      await coupon.save();
+    }
+    const amount = chargeTotal.toFixed(2);
+    const orderExtras = {
+      subtotal: total.toFixed(2),
+      discount: discount.toFixed(2),
+      couponCode: appliedCoupon,
+      timeline: [{ status: 'placed', note: 'Order placed', at: new Date(), by: 'system' }],
+    };
     const receipt = `violet_${req.user.id.slice(-6)}_${Date.now().toString(36)}`;
 
     const payResult = await processCheckoutPayment({
@@ -363,6 +410,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentDetail: payResult.payCheck.masked || '',
         razorpayOrderId: payResult.razorpayOrderId,
         paymentExpiresAt: new Date(Date.now() + UPI_TIMEOUT_SECONDS * 1000),
+        ...orderExtras,
       });
 
       // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
@@ -395,6 +443,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentProvider: payResult.provider,
         paymentDetail: payResult.masked || payResult.detail || '',
         paymentExpiresAt: payResult.expiresAt,
+        ...orderExtras,
       });
 
       // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
@@ -419,6 +468,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
       paymentProvider: payResult.provider,
       paymentDetail: payResult.masked || payResult.detail || '',
       paidAt: payResult.paidAt || null,
+      ...orderExtras,
     });
 
     cart.items = [];
@@ -543,6 +593,161 @@ router.post('/:id/confirm-payment', user_jwt, async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ success: false, msg: 'Payment confirmation failed' });
+  }
+});
+
+function pushTimeline(order, status, note, by) {
+  if (!Array.isArray(order.timeline)) order.timeline = [];
+  order.timeline.push({
+    status,
+    note: note || status,
+    at: new Date(),
+    by: by || 'system',
+  });
+}
+
+/** Seller marks order shipped / buyer or seller marks delivered. */
+router.post('/:id/status', user_jwt, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, msg: 'Order not found' });
+    const status = String(req.body.status || '').toLowerCase();
+    const isBuyer = String(order.buyer_id) === String(req.user.id);
+    const isSeller = order.items.some((i) => String(i.seller_id) === String(req.user.id));
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({ success: false, msg: 'Not allowed' });
+    }
+
+    if (status === 'shipped') {
+      if (!isSeller) return res.status(403).json({ success: false, msg: 'Only seller can mark shipped' });
+      if (!['placed', 'shipped'].includes(order.status)) {
+        return res.status(400).json({ success: false, msg: 'Order cannot be shipped from current status' });
+      }
+      order.status = 'shipped';
+      order.shippedAt = new Date();
+      order.trackingNumber = String(req.body.trackingNumber || order.trackingNumber || '').trim();
+      order.carrier = String(req.body.carrier || order.carrier || '').trim();
+      pushTimeline(
+        order,
+        'shipped',
+        order.trackingNumber
+          ? `Shipped via ${order.carrier || 'carrier'} · ${order.trackingNumber}`
+          : 'Marked as shipped',
+        req.user.id,
+      );
+      await order.save();
+      await notifyUser({
+        user_id: order.buyer_id,
+        type: 'order',
+        title: 'Your order shipped',
+        body: `Order #${String(order._id).slice(-6)} is on the way`,
+        link: '/orders',
+      });
+      return res.status(200).json({ success: true, order });
+    }
+
+    if (status === 'delivered') {
+      if (!isBuyer && !isSeller) {
+        return res.status(403).json({ success: false, msg: 'Not allowed' });
+      }
+      if (!['shipped', 'placed', 'delivered'].includes(order.status)) {
+        return res.status(400).json({ success: false, msg: 'Order cannot be delivered yet' });
+      }
+      order.status = 'delivered';
+      order.deliveredAt = new Date();
+      pushTimeline(order, 'delivered', 'Delivered', req.user.id);
+      await order.save();
+      return res.status(200).json({ success: true, order });
+    }
+
+    return res.status(400).json({ success: false, msg: 'Unsupported status' });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to update order status' });
+  }
+});
+
+/** Buyer requests a return/refund after delivery. */
+router.post('/:id/return', user_jwt, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order || String(order.buyer_id) !== String(req.user.id)) {
+      return res.status(404).json({ success: false, msg: 'Order not found' });
+    }
+    if (order.status !== 'delivered') {
+      return res.status(400).json({ success: false, msg: 'Returns open after delivery' });
+    }
+    if (order.returnRequest?.status && order.returnRequest.status !== 'none') {
+      return res.status(400).json({ success: false, msg: 'Return already requested' });
+    }
+    const reason = String(req.body.reason || '').trim();
+    if (reason.length < 5) {
+      return res.status(400).json({ success: false, msg: 'Please explain the return reason' });
+    }
+    order.returnRequest = {
+      status: 'requested',
+      reason,
+      requestedAt: new Date(),
+      resolvedAt: null,
+      refundAmount: '',
+    };
+    pushTimeline(order, 'return_requested', reason, req.user.id);
+    await order.save();
+    const sellerIds = [...new Set(order.items.map((i) => String(i.seller_id)))];
+    await Promise.all(
+      sellerIds.map((sellerId) =>
+        notifyUser({
+          user_id: sellerId,
+          type: 'order',
+          title: 'Return requested',
+          body: `Buyer requested a return on #${String(order._id).slice(-6)}`,
+          link: '/seller',
+        }),
+      ),
+    );
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Could not request return' });
+  }
+});
+
+/** Seller resolves a return request. */
+router.post('/:id/return/resolve', user_jwt, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, msg: 'Order not found' });
+    const isSeller = order.items.some((i) => String(i.seller_id) === String(req.user.id));
+    if (!isSeller) return res.status(403).json({ success: false, msg: 'Only seller can resolve' });
+    if (order.returnRequest?.status !== 'requested') {
+      return res.status(400).json({ success: false, msg: 'No open return request' });
+    }
+    const decision = String(req.body.decision || '').toLowerCase();
+    if (!['approved', 'rejected', 'refunded'].includes(decision)) {
+      return res.status(400).json({ success: false, msg: 'decision must be approved, rejected, or refunded' });
+    }
+    order.returnRequest.status = decision;
+    order.returnRequest.resolvedAt = new Date();
+    if (decision === 'refunded') {
+      order.returnRequest.refundAmount = order.total;
+      order.paymentStatus = 'refunded';
+      order.status = 'returned';
+      pushTimeline(order, 'refunded', 'Refund issued', req.user.id);
+    } else {
+      pushTimeline(order, `return_${decision}`, `Return ${decision}`, req.user.id);
+    }
+    await order.save();
+    await notifyUser({
+      user_id: order.buyer_id,
+      type: 'order',
+      title: `Return ${decision}`,
+      body: `Your return on #${String(order._id).slice(-6)} was ${decision}`,
+      link: '/orders',
+    });
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Could not resolve return' });
   }
 });
 

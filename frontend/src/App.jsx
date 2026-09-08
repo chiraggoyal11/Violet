@@ -20,6 +20,11 @@ import MessagesPage from './pages/MessagesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import ShopPage from './pages/ShopPage';
+import AdminPage from './pages/AdminPage';
+import WishlistPage from './pages/WishlistPage';
+import SharedWishlistPage from './pages/SharedWishlistPage';
+import GuestCheckoutPage from './pages/GuestCheckoutPage';
 import RequireAuth from './components/RequireAuth';
 
 function Shell() {
@@ -41,6 +46,9 @@ function Shell() {
           <Route path="/" element={<HomePage />} />
           <Route path="/catalog" element={<CatalogPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
+          <Route path="/shop/:username" element={<ShopPage />} />
+          <Route path="/w/:token" element={<SharedWishlistPage />} />
+          <Route path="/guest-checkout" element={<GuestCheckoutPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -106,6 +114,22 @@ function Shell() {
             element={
               <RequireAuth>
                 <SettingsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/wishlist"
+            element={
+              <RequireAuth>
+                <WishlistPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <RequireAuth>
+                <AdminPage />
               </RequireAuth>
             }
           />

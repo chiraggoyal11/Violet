@@ -297,6 +297,12 @@ router.put('/profile', user_jwt, async (req, res) => {
         if (req.body.last_name !== undefined) {
             user.last_name = String(req.body.last_name || '').trim().slice(0, 80);
         }
+        if (req.body.bio !== undefined) {
+            user.bio = String(req.body.bio || '').trim().slice(0, 500);
+        }
+        if (req.body.shopName !== undefined) {
+            user.shopName = String(req.body.shopName || '').trim().slice(0, 80);
+        }
         if (gender !== undefined) user.gender = gender;
         if (date_of_birth !== undefined) user.date_of_birth = date_of_birth;
         if (req.body.address !== undefined) {
@@ -542,7 +548,11 @@ router.post('/forgot-password', async (req, res) => {
             });
         }
 
-        const otp = await createPasswordOtp(otpKey);
+        const result = await createPasswordOtp(otpKey, {
+          email: user.email,
+          phoneE164: `${phone.country_code}${phone.phone_no}`,
+        });
+        const otp = typeof result === 'string' ? result : result.otp;
         const payload = {
             success: true,
             msg: 'If that phone number is registered, a reset code is available for 15 minutes.'
@@ -550,6 +560,9 @@ router.post('/forgot-password', async (req, res) => {
         if (shouldReturnOtpInResponse()) {
             payload.resetCode = otp;
             payload.devOtp = otp; // backward compatible with older frontend
+        }
+        if (result?.delivery?.delivered) {
+          payload.delivered = true;
         }
         return res.status(200).json(payload);
     } catch (error) {

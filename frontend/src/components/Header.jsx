@@ -127,12 +127,20 @@ export default function Header() {
                   <Link role="menuitem" to="/favorites" onClick={() => setMenuOpen(false)}>
                     Favorites
                   </Link>
+                  <Link role="menuitem" to="/wishlist" onClick={() => setMenuOpen(false)}>
+                    Wishlist
+                  </Link>
                   <Link role="menuitem" to="/mine" onClick={() => setMenuOpen(false)}>
                     My listings
                   </Link>
                   <Link role="menuitem" to="/seller" onClick={() => setMenuOpen(false)}>
                     Seller dashboard
                   </Link>
+                  {user.role === 'admin' ? (
+                    <Link role="menuitem" to="/admin" onClick={() => setMenuOpen(false)}>
+                      Admin
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -151,6 +159,7 @@ export default function Header() {
           </>
         ) : (
           <div className="top-bar-guest">
+            <Link to="/guest-checkout">Guest checkout</Link>
             <Link to="/login">Sign in</Link>
             <Link className="btn btn-primary btn-compact" to="/register">
               Join

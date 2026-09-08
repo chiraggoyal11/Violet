@@ -26,7 +26,8 @@ const settingsSchema = new mongoose.Schema(
             enum: ['INR', 'USD', 'EUR'],
             default: 'INR'
         },
-        defaultCheckoutNote: { type: String, trim: true, default: '' }
+        defaultCheckoutNote: { type: String, trim: true, default: '' },
+        pushEnabled: { type: Boolean, default: false }
     },
     { _id: false }
 );
@@ -57,6 +58,40 @@ const userSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
+    bio: {
+        type: String,
+        trim: true,
+        default: '',
+        maxlength: 500
+    },
+    shopName: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    role: {
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user',
+        index: true
+    },
+    suspended: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    blockedUsers: {
+        type: [String],
+        default: []
+    },
+    pushSubscription: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
+    isGuest: {
+        type: Boolean,
+        default: false
+    },
     address: {
         type: addressSchema,
         default: () => ({})
@@ -74,7 +109,7 @@ const userSchema = new mongoose.Schema({
     },
     auth_provider: {
         type: String,
-        enum: ['local', 'google'],
+        enum: ['local', 'google', 'guest'],
         default: 'local'
     },
     google_id: {

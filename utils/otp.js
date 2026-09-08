@@ -25,7 +25,7 @@ function shouldReturnOtpInResponse() {
   return !process.env.TWILIO_ACCOUNT_SID && !process.env.SMTP_HOST;
 }
 
-async function createPasswordOtp(phone_no) {
+async function createPasswordOtp(phone_no, { email, phoneE164 } = {}) {
   const otp = generateOtp();
   const otpHash = await bcryptjs.hash(otp, 8);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -33,11 +33,23 @@ async function createPasswordOtp(phone_no) {
   await PasswordReset.deleteMany({ phone_no });
   await PasswordReset.create({ phone_no, otpHash, expiresAt });
 
+  let delivery = { delivered: false, results: [] };
+  try {
+    const { deliverPasswordOtp } = require('./otpDelivery');
+    delivery = await deliverPasswordOtp({
+      phoneE164: phoneE164 || phone_no,
+      email,
+      otp,
+    });
+  } catch (err) {
+    console.log('OTP delivery error:', err.message);
+  }
+
   if (devOtpEnabled() || shouldReturnOtpInResponse()) {
     console.log(`[Violet] Password reset OTP for ${phone_no}: ${otp}`);
   }
 
-  return otp;
+  return { otp, delivery };
 }
 
 async function verifyPasswordOtp(phone_no, otp) {
