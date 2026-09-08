@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import AddressFields from '../components/AddressFields';
@@ -53,10 +53,17 @@ const STEPS = [
   { id: 'payment', label: 'Payment' },
 ];
 
+function timeoutMinutesLabel(seconds) {
+  const mins = Math.max(1, Math.round(Number(seconds || 120) / 60));
+  return mins === 1 ? '1 minute' : `${mins} minutes`;
+}
+
 export default function CheckoutPage() {
   const { user, token, booting, updateLocalUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const addressTouchedRef = useRef(false);
+  const resumedPendingRef = useRef(false);
   const [step, setStep] = useState('address');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState('0.00');
@@ -64,6 +71,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [pendingBlock, setPendingBlock] = useState(null);
   const [editingAddress, setEditingAddress] = useState(false);
   const [address, setAddress] = useState(emptyAddress);
   const [paymentMethod, setPaymentMethod] = useState('upi');
@@ -80,6 +88,8 @@ export default function CheckoutPage() {
 
   const profileAddress = user?.address || emptyAddress;
   const profileReady = hasProfileAddress(profileAddress);
+  const upiTimeoutSeconds = Number(payConfig?.upiTimeoutSeconds) || 120;
+  const upiTimeoutLabel = timeoutMinutesLabel(upiTimeoutSeconds);
 
   useEffect(() => {
     if (!token) return;
@@ -113,6 +123,45 @@ export default function CheckoutPage() {
     // updateLocalUser is stable enough for a one-shot refresh; including it retriggers
     // loading forever when AuthContext recreates the callback after setUser.
   }, [token]);
+
+  // Resume an in-progress UPI payment (Orders → Continue, or leaving checkout mid-timer).
+  useEffect(() => {
+    if (!token || loading || resumedPendingRef.current) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.pendingPayment(token);
+        if (cancelled || !data?.pending) return;
+        const order = data.pending;
+        if (order.paymentMethod !== 'upi') return;
+        resumedPendingRef.current = true;
+        setPendingOrderId(order._id);
+        setRemainingSeconds(
+          Number(data.payment?.remainingSeconds) ||
+            Number(payConfig?.upiTimeoutSeconds) ||
+            120,
+        );
+        setReceipt({
+          orderId: order._id,
+          status: 'pending',
+          method: 'upi',
+          ref: data.payment?.ref || order.paymentRef,
+          provider: data.payment?.provider || order.paymentProvider,
+          detail: data.payment?.detail || order.paymentDetail,
+          amount: order.total,
+          expiresAt: data.payment?.expiresAt,
+        });
+        setPayPhase('awaiting_upi');
+        setError('');
+        setPendingBlock(null);
+      } catch {
+        /* form checkout still works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, loading, searchParams, payConfig?.upiTimeoutSeconds]);
 
   useEffect(() => {
     const defaultNote = user?.settings?.defaultCheckoutNote;
@@ -181,7 +230,9 @@ export default function CheckoutPage() {
           refreshCartBadge();
         } else if (status === 'failed') {
           setPayPhase('failed');
-          setError('Payment was not completed in time. Your items are still in the cart.');
+          setError(
+            `Payment was not completed in time (${upiTimeoutLabel}). Your items are still in the cart.`,
+          );
           refreshCartBadge();
         }
       } catch {
@@ -194,7 +245,7 @@ export default function CheckoutPage() {
       window.clearInterval(tick);
       window.clearInterval(poll);
     };
-  }, [payPhase, pendingOrderId, token]);
+  }, [payPhase, pendingOrderId, token, upiTimeoutLabel]);
 
   useEffect(() => {
     if (payPhase !== 'awaiting_upi' || remainingSeconds > 0 || !pendingOrderId || !token) {
@@ -216,13 +267,17 @@ export default function CheckoutPage() {
           refreshCartBadge();
         } else {
           setPayPhase('failed');
-          setError('Payment timed out after 5 minutes. Your items are still in the cart.');
+          setError(
+            `Payment timed out after ${upiTimeoutLabel}. Your items are still in the cart.`,
+          );
           refreshCartBadge();
         }
       } catch {
         if (!cancelled) {
           setPayPhase('failed');
-          setError('Payment timed out after 5 minutes. Your items are still in the cart.');
+          setError(
+            `Payment timed out after ${upiTimeoutLabel}. Your items are still in the cart.`,
+          );
           refreshCartBadge();
         }
       }
@@ -230,7 +285,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [remainingSeconds, payPhase, pendingOrderId, token]);
+  }, [remainingSeconds, payPhase, pendingOrderId, token, upiTimeoutLabel]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
@@ -337,9 +392,7 @@ export default function CheckoutPage() {
       if (data.action === 'awaiting_upi') {
         setPendingOrderId(data.order._id);
         setRemainingSeconds(
-          Number(data.payment?.remainingSeconds) ||
-            Number(payConfig?.upiTimeoutSeconds) ||
-            300,
+          Number(data.payment?.remainingSeconds) || upiTimeoutSeconds,
         );
         setReceipt({
           orderId: data.order._id,
@@ -371,7 +424,21 @@ export default function CheckoutPage() {
       refreshCartBadge();
     } catch (err) {
       setPayPhase('form');
-      setError(err.message || 'Payment failed');
+      const blockedId = err?.data?.orderId;
+      if (blockedId) {
+        setPendingBlock({
+          orderId: blockedId,
+          resumePath: err.data.resumePath || `/checkout?resume=${blockedId}`,
+          remainingSeconds: err.data.payment?.remainingSeconds,
+        });
+        setError(
+          err.message ||
+            'You already have a payment in progress. Continue it from Orders or cancel it first.',
+        );
+      } else {
+        setPendingBlock(null);
+        setError(err.message || 'Payment failed');
+      }
       refreshCartBadge();
     } finally {
       setBusy(false);
@@ -385,6 +452,8 @@ export default function CheckoutPage() {
       await api.cancelPayment(pendingOrderId, token);
       setPayPhase('failed');
       setError('Payment cancelled. Your items are still in the cart.');
+      setPendingBlock(null);
+      resumedPendingRef.current = false;
       refreshCartBadge();
     } catch (err) {
       setError(err.message || 'Could not cancel payment');
@@ -409,10 +478,12 @@ export default function CheckoutPage() {
 
   function retryPayment() {
     setError('');
+    setPendingBlock(null);
     setPayPhase('form');
     setPendingOrderId('');
     setReceipt(null);
     setRemainingSeconds(0);
+    resumedPendingRef.current = false;
     navigate('/cart', { replace: true });
   }
 
@@ -524,9 +595,13 @@ export default function CheckoutPage() {
             >
               <span className="payment-timer-label">Time left</span>
               <strong className="payment-timer-value">{formatTimer(remainingSeconds)}</strong>
-              <span className="payment-timer-hint">Expires in 5 minutes</span>
+              <span className="payment-timer-hint">Expires in {upiTimeoutLabel}</span>
             </div>
             {error ? <p className="status error">{error}</p> : null}
+            <p className="lede payment-resume-hint">
+              Left this screen? You can always reopen this payment from{' '}
+              <Link to="/orders">Orders</Link>.
+            </p>
             <div className="form-actions">
               <button
                 type="button"
@@ -557,7 +632,7 @@ export default function CheckoutPage() {
             <h3>Order failed</h3>
             <p className="lede">
               {error ||
-                'The UPI payment was not completed within 5 minutes. Your order was cancelled.'}
+                `The UPI payment was not completed within ${upiTimeoutLabel}. Your order was cancelled.`}
             </p>
             <div className="form-actions">
               <button type="button" className="btn btn-accent" onClick={retryPayment}>
@@ -622,6 +697,62 @@ export default function CheckoutPage() {
       </ol>
 
       {error ? <p className="status error">{error}</p> : null}
+      {pendingBlock ? (
+        <div className="payment-pending-banner" role="status">
+          <div>
+            <strong>Payment in progress</strong>
+            <p>
+              Finish or cancel it on Orders
+              {typeof pendingBlock.remainingSeconds === 'number'
+                ? ` (${Math.max(0, pendingBlock.remainingSeconds)}s left)`
+                : ''}
+              . Unfinished payments cancel automatically after {upiTimeoutLabel}.
+            </p>
+          </div>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-accent"
+              onClick={() => {
+                resumedPendingRef.current = false;
+                api
+                  .pendingPayment(token)
+                  .then((data) => {
+                    if (data?.pending) {
+                      resumedPendingRef.current = true;
+                      setPendingOrderId(data.pending._id);
+                      setRemainingSeconds(
+                        Number(data.payment?.remainingSeconds) || upiTimeoutSeconds,
+                      );
+                      setReceipt({
+                        orderId: data.pending._id,
+                        status: 'pending',
+                        method: 'upi',
+                        ref: data.payment?.ref || data.pending.paymentRef,
+                        provider:
+                          data.payment?.provider || data.pending.paymentProvider,
+                        detail: data.payment?.detail || data.pending.paymentDetail,
+                        amount: data.pending.total,
+                        expiresAt: data.payment?.expiresAt,
+                      });
+                      setPayPhase('awaiting_upi');
+                      setPendingBlock(null);
+                      setError('');
+                    } else {
+                      navigate('/orders');
+                    }
+                  })
+                  .catch(() => navigate('/orders'));
+              }}
+            >
+              Continue payment
+            </button>
+            <Link className="btn btn-secondary" to="/orders">
+              Open Orders
+            </Link>
+          </div>
+        </div>
+      ) : null}
 
       {step === 'address' ? (
         <form className="panel wide checkout-panel" onSubmit={continueFromAddress}>
@@ -798,7 +929,7 @@ export default function CheckoutPage() {
               <h3>Payment</h3>
               <p className="lede">
                 {payConfig?.demo !== false
-                  ? 'Pay with UPI, Card, or Cash on delivery. UPI asks you to approve in your app within 5 minutes — otherwise payment fails.'
+                  ? `Pay with UPI, Card, or Cash on delivery. UPI asks you to approve in your app within ${upiTimeoutLabel} — otherwise payment fails.`
                   : 'Pay securely with Razorpay Checkout, or choose Cash on delivery.'}
               </p>
 

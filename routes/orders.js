@@ -10,7 +10,7 @@ const {
   getPublicConfig,
   processCheckoutPayment,
   verifyRazorpaySignature,
-  DEMO_UPI_AUTO_CONFIRM_SECONDS,
+  UPI_TIMEOUT_SECONDS,
   demoUpiAutoConfirmSeconds,
 } = require('../services/payment');
 
@@ -145,15 +145,14 @@ async function failPendingPaymentOrder(order) {
 }
 
 /**
- * Resolve demo UPI collect: expire, or auto-confirm after short delay.
+ * Resolve a pending online payment: expire after the timer, or auto-confirm demo UPI.
+ * COD stays pending until delivery.
  */
-async function resolveUpiPayment(order) {
-  if (
-    !order ||
-    order.paymentMethod !== 'upi' ||
-    order.paymentStatus !== 'pending' ||
-    order.paymentProvider === 'razorpay'
-  ) {
+async function resolvePendingPayment(order) {
+  if (!order || order.paymentStatus !== 'pending') {
+    return order;
+  }
+  if (order.paymentMethod === 'cod') {
     return order;
   }
 
@@ -167,7 +166,10 @@ async function resolveUpiPayment(order) {
   }
 
   // Demo: simulate UPI app approval after a short delay.
-  if (order.paymentProvider === 'demo') {
+  if (
+    order.paymentMethod === 'upi' &&
+    order.paymentProvider === 'demo'
+  ) {
     const created = new Date(order.createdAt || order._id.getTimestamp()).getTime();
     if (now - created >= demoUpiAutoConfirmSeconds() * 1000) {
       order.paymentStatus = 'paid';
@@ -182,6 +184,23 @@ async function resolveUpiPayment(order) {
   }
 
   return order;
+}
+
+/** @deprecated use resolvePendingPayment */
+async function resolveUpiPayment(order) {
+  return resolvePendingPayment(order);
+}
+
+async function findActivePendingPayment(buyerId) {
+  let pending = await Order.findOne({
+    buyer_id: buyerId,
+    paymentStatus: 'pending',
+    paymentMethod: { $in: ['upi', 'card'] },
+  }).sort({ _id: -1 });
+  if (!pending) return null;
+  pending = await resolvePendingPayment(pending);
+  if (!pending || pending.paymentStatus !== 'pending') return null;
+  return pending;
 }
 
 function paymentPayload(order) {
@@ -210,11 +229,41 @@ router.get('/payments/config', user_jwt, (req, res) => {
 
 router.get('/', user_jwt, async (req, res) => {
   try {
-    const orders = await Order.find({ buyer_id: req.user.id }).sort({ _id: -1 });
+    let orders = await Order.find({ buyer_id: req.user.id }).sort({ _id: -1 });
+    orders = await Promise.all(
+      orders.map(async (order) => {
+        if (
+          order.paymentStatus === 'pending' &&
+          order.paymentMethod !== 'cod'
+        ) {
+          return resolvePendingPayment(order);
+        }
+        return order;
+      }),
+    );
     return res.status(200).json({ success: true, orders });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ success: false, msg: 'Failed to load orders' });
+  }
+});
+
+/** Active UPI/card payment that must be finished or cancelled before a new checkout. */
+router.get('/pending-payment', user_jwt, async (req, res) => {
+  try {
+    const pending = await findActivePendingPayment(req.user.id);
+    if (!pending) {
+      return res.status(200).json({ success: true, pending: null });
+    }
+    return res.status(200).json({
+      success: true,
+      pending,
+      payment: paymentPayload(pending),
+      resumePath: `/checkout?resume=${pending._id}`,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to load pending payment' });
   }
 });
 
@@ -260,16 +309,16 @@ router.post('/checkout', user_jwt, async (req, res) => {
     }
 
     // Avoid double-reserving stock while a UPI/Razorpay collect is still open.
-    const pendingPay = await Order.findOne({
-      buyer_id: req.user.id,
-      paymentStatus: 'pending',
-      paymentMethod: { $in: ['upi', 'card'] },
-    }).sort({ _id: -1 });
+    // Also expire timed-out payments here so abandoned checkouts unlock after 2 minutes.
+    const pendingPay = await findActivePendingPayment(req.user.id);
     if (pendingPay) {
       return res.status(400).json({
         success: false,
-        msg: 'You already have a payment in progress. Finish or cancel it before placing another order.',
+        msg:
+          'You already have a payment in progress. Open Orders to finish or cancel it, or wait until the 2‑minute timer expires.',
         orderId: pendingPay._id,
+        payment: paymentPayload(pendingPay),
+        resumePath: `/checkout?resume=${pendingPay._id}`,
       });
     }
 
@@ -313,7 +362,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentProvider: 'razorpay',
         paymentDetail: payResult.payCheck.masked || '',
         razorpayOrderId: payResult.razorpayOrderId,
-        paymentExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        paymentExpiresAt: new Date(Date.now() + UPI_TIMEOUT_SECONDS * 1000),
       });
 
       // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
@@ -351,7 +400,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
       // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
       return res.status(200).json({
         success: true,
-        msg: 'Approve the UPI payment request within 5 minutes',
+        msg: `Approve the UPI payment request within ${Math.round(UPI_TIMEOUT_SECONDS / 60)} minutes`,
         action: 'awaiting_upi',
         order,
         payment: paymentPayload(order),
@@ -406,7 +455,7 @@ router.get('/:id/payment-status', user_jwt, async (req, res) => {
     if (!order || String(order.buyer_id) !== String(req.user.id)) {
       return res.status(404).json({ success: false, msg: 'Order not found' });
     }
-    order = await resolveUpiPayment(order);
+    order = await resolvePendingPayment(order);
     return res.status(200).json({
       success: true,
       order,

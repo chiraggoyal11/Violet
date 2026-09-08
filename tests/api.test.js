@@ -19,6 +19,7 @@ process.env.S3_ENDPOINT = process.env.S3_ENDPOINT || 'http://127.0.0.1:9000';
 const app = require('../server');
 const User = require('../models/user');
 const Product = require('../models/product');
+const Order = require('../models/order');
 const Notification = require('../models/notification');
 
 const phone = `${Date.now().toString().slice(-10)}`;
@@ -507,6 +508,22 @@ describe('Violet API', () => {
       })
       .expect(400);
     assert.match(String(blockedSecond.body.msg || ''), /payment in progress/i);
+    assert.ok(blockedSecond.body.orderId);
+    assert.ok(String(blockedSecond.body.resumePath || '').includes('/checkout?resume='));
+
+    const pendingView = await request(app)
+      .get('/api/violet/orders/pending-payment')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.ok(pendingView.body.pending);
+    assert.equal(String(pendingView.body.pending._id), String(checkout.body.order._id));
+    assert.ok(pendingView.body.payment?.remainingSeconds <= 120);
+
+    const cfg = await request(app)
+      .get('/api/violet/orders/payments/config')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cfg.body.payment.upiTimeoutSeconds, 120);
 
     // Speed up demo UPI auto-confirm for this assertion
     process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS = '1';
@@ -615,7 +632,7 @@ describe('Violet API', () => {
       .field('Product_Name', 'Save Later Vase')
       .field('Product_Detail', 'Ceramic vase')
       .field('Price', '22.00')
-      .field('category', 'Home')
+      .field('category', 'Home & Living')
       .field('stock', '4')
       .expect(200);
 
@@ -681,6 +698,80 @@ describe('Violet API', () => {
       .expect(200);
     assert.equal(cartAfterFail.body.items.length, 1);
     assert.ok(cartAfterFail.body.count >= 1);
+  });
+
+  it('auto-cancels UPI payment after the 2-minute timeout', async () => {
+    process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS = '9999';
+    const listing = await request(app)
+      .post('/api/violet/products')
+      .set('Authorization', `Bearer ${token}`)
+      .field('Product_Name', 'Timeout Bowl')
+      .field('Product_Detail', 'Expires quickly')
+      .field('Price', '15.00')
+      .field('category', 'Home & Living')
+      .field('stock', '2')
+      .expect(200);
+
+    const pid = listing.body.product._id;
+    await request(app)
+      .post('/api/violet/cart/items')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ product_id: pid, quantity: 1 })
+      .expect(200);
+
+    const checkout = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '1 Timeout Rd',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'upi',
+        payment: { upiId: 'timeout@upi' }
+      })
+      .expect(200);
+    assert.equal(checkout.body.action, 'awaiting_upi');
+    assert.ok(checkout.body.payment.remainingSeconds <= 120);
+
+    await Order.findByIdAndUpdate(checkout.body.order._id, {
+      paymentExpiresAt: new Date(Date.now() - 1000),
+    });
+
+    const expired = await request(app)
+      .get(`/api/violet/orders/${checkout.body.order._id}/payment-status`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(expired.body.order.paymentStatus, 'failed');
+    assert.equal(expired.body.order.status, 'cancelled');
+
+    const pendingGone = await request(app)
+      .get('/api/violet/orders/pending-payment')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(pendingGone.body.pending, null);
+
+    // Buyer can place another order after timeout cancels the old one.
+    const again = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '1 Timeout Rd',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'cod',
+        payment: {}
+      })
+      .expect(200);
+    assert.equal(again.body.action, 'captured');
+    delete process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS;
   });
 
   it('updates and deletes owned products (including S3 object)', async () => {
