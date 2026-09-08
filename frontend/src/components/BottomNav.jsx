@@ -4,9 +4,14 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 
 const MSG_BADGE_REFRESH = 'violet:messages-badge-refresh';
+const CART_BADGE_REFRESH = 'violet:cart-badge-refresh';
 
 export function refreshMessageBadge() {
   window.dispatchEvent(new Event(MSG_BADGE_REFRESH));
+}
+
+export function refreshCartBadge() {
+  window.dispatchEvent(new Event(CART_BADGE_REFRESH));
 }
 
 function Icon({ children }) {
@@ -81,6 +86,7 @@ const userLinks = [
   {
     to: '/cart',
     label: 'Cart',
+    badge: 'cart',
     icon: (
       <Icon>
         <path
@@ -121,17 +127,19 @@ export default function BottomNav() {
   const { user, token } = useAuth();
   const location = useLocation();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [cartCount, setCartCount] = useState(0);
   const links = user ? userLinks : guestLinks;
 
   useEffect(() => {
     if (!token) {
       setUnreadMessages(0);
+      setCartCount(0);
       return undefined;
     }
 
     let cancelled = false;
 
-    async function poll() {
+    async function pollMessages() {
       try {
         const data = await api.unreadMessageCount(token);
         if (!cancelled) setUnreadMessages(Number(data.unread) || 0);
@@ -140,37 +148,72 @@ export default function BottomNav() {
       }
     }
 
-    function onRefresh() {
-      poll();
+    async function pollCart() {
+      try {
+        const data = await api.cartCount(token);
+        if (!cancelled) setCartCount(Number(data.count) || 0);
+      } catch {
+        /* ignore transient errors */
+      }
     }
 
-    poll();
-    const timer = setInterval(poll, 15000);
-    window.addEventListener(MSG_BADGE_REFRESH, onRefresh);
-    window.addEventListener('focus', onRefresh);
+    function onMsgRefresh() {
+      pollMessages();
+    }
+    function onCartRefresh() {
+      pollCart();
+    }
+
+    pollMessages();
+    pollCart();
+    const timer = setInterval(() => {
+      pollMessages();
+      pollCart();
+    }, 15000);
+    window.addEventListener(MSG_BADGE_REFRESH, onMsgRefresh);
+    window.addEventListener(CART_BADGE_REFRESH, onCartRefresh);
+    window.addEventListener('focus', onCartRefresh);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
-      window.removeEventListener(MSG_BADGE_REFRESH, onRefresh);
-      window.removeEventListener('focus', onRefresh);
+      window.removeEventListener(MSG_BADGE_REFRESH, onMsgRefresh);
+      window.removeEventListener(CART_BADGE_REFRESH, onCartRefresh);
+      window.removeEventListener('focus', onCartRefresh);
     };
   }, [token]);
 
   useEffect(() => {
     if (!token) return undefined;
     if (!location.pathname.startsWith('/messages')) return undefined;
-    // Opening inbox/thread marks messages read on the server; refresh soon after.
     const t = setTimeout(() => refreshMessageBadge(), 400);
+    return () => clearTimeout(t);
+  }, [location.pathname, token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    if (!location.pathname.startsWith('/cart') && !location.pathname.startsWith('/checkout')) {
+      return undefined;
+    }
+    const t = setTimeout(() => refreshCartBadge(), 300);
     return () => clearTimeout(t);
   }, [location.pathname, token]);
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
       {links.map((link) => {
-        const showBadge = link.badge === 'messages' && unreadMessages > 0;
+        const showMsgBadge = link.badge === 'messages' && unreadMessages > 0;
+        const showCartBadge = link.badge === 'cart' && cartCount > 0;
+        const badgeValue = showMsgBadge
+          ? unreadMessages
+          : showCartBadge
+            ? cartCount
+            : 0;
+        const showBadge = showMsgBadge || showCartBadge;
         const ariaLabel = showBadge
-          ? `${link.label}, ${unreadMessages} unread`
+          ? showCartBadge
+            ? `${link.label}, ${cartCount} item${cartCount === 1 ? '' : 's'}`
+            : `${link.label}, ${unreadMessages} unread`
           : link.label;
         return (
           <NavLink
@@ -185,7 +228,7 @@ export default function BottomNav() {
               {link.icon}
               {showBadge ? (
                 <span className="badge-count" aria-hidden="true">
-                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                  {badgeValue > 99 ? '99+' : badgeValue}
                 </span>
               ) : null}
             </span>

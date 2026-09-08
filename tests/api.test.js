@@ -471,6 +471,31 @@ describe('Violet API', () => {
     assert.ok(checkout.body.payment?.remainingSeconds > 0);
     assert.equal(checkout.body.order.shippingAddress.city, 'Pune');
 
+    // Cart stays until payment succeeds so a failed pay can retry.
+    const cartWhilePending = await request(app)
+      .get('/api/violet/cart')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cartWhilePending.body.items.length, 1);
+    assert.equal(cartWhilePending.body.count, 2);
+
+    const blockedSecond = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '12 Test Lane',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'upi',
+        payment: { upiId: 'buyer@upi' }
+      })
+      .expect(400);
+    assert.match(String(blockedSecond.body.msg || ''), /payment in progress/i);
+
     // Speed up demo UPI auto-confirm for this assertion
     process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS = '1';
     await new Promise((r) => setTimeout(r, 1200));
@@ -480,6 +505,13 @@ describe('Violet API', () => {
       .expect(200);
     assert.equal(paid.body.order.paymentStatus, 'paid');
     delete process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS;
+
+    const cartAfterPaid = await request(app)
+      .get('/api/violet/cart')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cartAfterPaid.body.items.length, 0);
+    assert.equal(cartAfterPaid.body.count, 0);
 
     const review = await request(app)
       .post(`/api/violet/reviews/product/${cartProductId}`)
@@ -562,6 +594,81 @@ describe('Violet API', () => {
     assert.equal(cod.body.order.paymentStatus, 'pending');
     assert.equal(cod.body.order.paymentProvider, 'cod');
     assert.ok(cod.body.payment?.ref);
+  });
+
+  it('supports save for later and keeps cart items when UPI payment is cancelled', async () => {
+    const listing = await request(app)
+      .post('/api/violet/products')
+      .set('Authorization', `Bearer ${token}`)
+      .field('Product_Name', 'Save Later Vase')
+      .field('Product_Detail', 'Ceramic vase')
+      .field('Price', '22.00')
+      .field('category', 'Home')
+      .field('stock', '4')
+      .expect(200);
+
+    const pid = listing.body.product._id;
+    await request(app)
+      .post('/api/violet/cart/items')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ product_id: pid, quantity: 2 })
+      .expect(200);
+
+    const countRes = await request(app)
+      .get('/api/violet/cart/count')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.ok(countRes.body.count >= 2);
+
+    const saved = await request(app)
+      .post(`/api/violet/cart/items/${pid}/save-for-later`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(saved.body.items.length, 0);
+    assert.equal(saved.body.savedForLater.length, 1);
+    assert.equal(saved.body.savedForLater[0].product_id, pid);
+
+    const moved = await request(app)
+      .post(`/api/violet/cart/saved/${pid}/move-to-cart`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(moved.body.items.length, 1);
+    assert.equal(moved.body.savedForLater.length, 0);
+
+    const checkout = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '9 Lane',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'upi',
+        payment: { upiId: 'cancel@upi' }
+      })
+      .expect(200);
+    assert.equal(checkout.body.action, 'awaiting_upi');
+
+    const cartPending = await request(app)
+      .get('/api/violet/cart')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cartPending.body.items.length, 1);
+
+    await request(app)
+      .post(`/api/violet/orders/${checkout.body.order._id}/cancel-payment`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+
+    const cartAfterFail = await request(app)
+      .get('/api/violet/cart')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cartAfterFail.body.items.length, 1);
+    assert.ok(cartAfterFail.body.count >= 1);
   });
 
   it('updates and deletes owned products (including S3 object)', async () => {

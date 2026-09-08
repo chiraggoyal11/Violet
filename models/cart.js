@@ -11,7 +11,8 @@ const cartItemSchema = new mongoose.Schema(
 const cartSchema = new mongoose.Schema(
   {
     user_id: { type: String, required: true, unique: true },
-    items: { type: [cartItemSchema], default: [] }
+    items: { type: [cartItemSchema], default: [] },
+    savedForLater: { type: [cartItemSchema], default: [] }
   },
   { timestamps: true }
 );
