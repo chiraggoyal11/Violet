@@ -632,7 +632,7 @@ describe('Violet API', () => {
       .field('Product_Name', 'Save Later Vase')
       .field('Product_Detail', 'Ceramic vase')
       .field('Price', '22.00')
-      .field('category', 'Home')
+      .field('category', 'Home & Living')
       .field('stock', '4')
       .expect(200);
 
