@@ -47,7 +47,8 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
 
     const purchased = await Order.findOne({
       buyer_id: String(req.user.id),
-      status: 'placed',
+      status: { $in: ['placed', 'shipped', 'delivered'] },
+      paymentStatus: { $in: ['paid', 'pending'] },
       'items.product_id': String(req.params.productId)
     }).select('_id');
     if (!purchased) {
@@ -58,6 +59,13 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
     }
 
     const user = await User.findById(req.user.id).select('username');
+    const photos = Array.isArray(req.body.photos)
+      ? req.body.photos.map(String).slice(0, 4)
+      : [];
+    const existing = await Review.findOne({
+      product_id: req.params.productId,
+      user_id: req.user.id,
+    });
     const review = await Review.findOneAndUpdate(
       { product_id: req.params.productId, user_id: req.user.id },
       {
@@ -65,7 +73,9 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
         user_id: req.user.id,
         username: user?.username || 'Buyer',
         rating,
-        comment
+        comment,
+        photos,
+        editedAt: existing ? new Date() : null,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -82,6 +92,34 @@ router.post('/product/:productId', user_jwt, async (req, res) => {
   } catch (error) {
     console.log(error);
     return mongoFailure(res, error, 'Failed to save review');
+  }
+});
+
+/** Seller reply to a review on their product. */
+router.post('/:reviewId/reply', user_jwt, async (req, res) => {
+  try {
+    const reply = String(req.body.reply || '').trim();
+    if (!reply) return res.status(400).json({ success: false, msg: 'Reply required' });
+    const review = await Review.findById(req.params.reviewId);
+    if (!review) return res.status(404).json({ success: false, msg: 'Review not found' });
+    const product = await Product.findById(review.product_id);
+    if (!product || String(product.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, msg: 'Only the seller can reply' });
+    }
+    review.sellerReply = reply.slice(0, 1000);
+    review.sellerRepliedAt = new Date();
+    await review.save();
+    await notifyUser({
+      user_id: review.user_id,
+      type: 'review',
+      title: 'Seller replied to your review',
+      body: reply.slice(0, 120),
+      link: `/product/${review.product_id}`,
+    });
+    return res.status(200).json({ success: true, review });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to save reply' });
   }
 });
 

@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     setForm(fromUser(user));
@@ -35,6 +36,54 @@ export default function SettingsPage() {
 
   function setBool(key, checked) {
     setForm((prev) => ({ ...prev, [key]: checked }));
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    const output = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
+    return output;
+  }
+
+  async function enablePush() {
+    setPushBusy(true);
+    setError('');
+    setOk('');
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        throw new Error('Push notifications are not supported in this browser.');
+      }
+      const vapid = await api.getVapidKey();
+      if (!vapid.enabled || !vapid.publicKey) {
+        throw new Error('Push is not configured on the server yet (missing VAPID keys).');
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error('Notification permission was not granted.');
+      }
+      let reg;
+      try {
+        reg = await navigator.serviceWorker.ready;
+      } catch {
+        throw new Error('Service worker not ready. Push needs a registered service worker.');
+      }
+      if (!reg?.pushManager) {
+        throw new Error('Push messaging is unavailable in this browser.');
+      }
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapid.publicKey),
+      });
+      await api.subscribePush(subscription.toJSON(), token);
+      setBool('pushEnabled', true);
+      setOk('Push notifications enabled.');
+    } catch (err) {
+      setError(err.message || 'Could not enable push');
+    } finally {
+      setPushBusy(false);
+    }
   }
 
   async function onSubmit(e) {
@@ -124,6 +173,16 @@ export default function SettingsPage() {
                 onChange={(e) => setBool('stockAlerts', e.target.checked)}
               />
             </label>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={pushBusy}
+                onClick={enablePush}
+              >
+                {pushBusy ? 'Enabling…' : 'Enable push notifications'}
+              </button>
+            </div>
           </fieldset>
 
           <fieldset className="form-section">

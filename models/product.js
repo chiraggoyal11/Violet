@@ -47,10 +47,13 @@ const productSchema = new mongoose.Schema(
     ImageUrl: { type: String, required: false },
     Images: { type: [String], default: [] },
     ImageUrls: { type: [String], default: [] },
+    lowStockThreshold: { type: Number, default: 2, min: 0 },
     deletedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );
+
+productSchema.index({ Product_Name: 'text', Product_Detail: 'text' });
 
 productSchema.statics.CATEGORIES = CATEGORIES;
 productSchema.statics.COLOURS = COLOURS;

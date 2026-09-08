@@ -24,6 +24,8 @@ function fromUser(user) {
     last_name: user?.last_name || '',
     gender: user?.gender || '',
     date_of_birth: user?.date_of_birth || '',
+    bio: user?.bio || '',
+    shopName: user?.shopName || '',
     address: { ...emptyAddress, ...(user?.address || {}) },
   };
 }
@@ -115,6 +117,8 @@ export default function ProfilePage() {
           last_name: form.last_name.trim(),
           gender: form.gender,
           date_of_birth: form.date_of_birth,
+          bio: form.bio.trim(),
+          shopName: form.shopName.trim(),
           address: form.address,
         },
         token,
@@ -168,6 +172,26 @@ export default function ProfilePage() {
                   value={form.email}
                   onChange={(e) => setField('email', e.target.value)}
                   autoComplete="email"
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="shopName">Shop name</label>
+                <input
+                  id="shopName"
+                  value={form.shopName}
+                  onChange={(e) => setField('shopName', e.target.value)}
+                  placeholder="Shown on your public shop"
+                />
+              </div>
+              <div className="form-field form-field-full">
+                <label htmlFor="bio">Bio</label>
+                <textarea
+                  id="bio"
+                  rows={2}
+                  maxLength={500}
+                  value={form.bio}
+                  onChange={(e) => setField('bio', e.target.value)}
+                  placeholder="Tell buyers about your craft"
                 />
               </div>
             </div>

@@ -4,6 +4,8 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { refreshCartBadge } from '../components/BottomNav';
 import { formatPrice } from '../components/ProductCard';
+import { formatMoney, setCurrencyRates } from '../utils/currency';
+import { pushRecentlyViewed } from '../utils/recentlyViewed';
 
 const QUICK_PROMPTS = [
   'Is this still available?',
@@ -77,6 +79,14 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  const [seller, setSeller] = useState(null);
+  const [wishAdded, setWishAdded] = useState(false);
+  const [offerAmount, setOfferAmount] = useState('');
+  const [offerMessage, setOfferMessage] = useState('');
+  const [showOffer, setShowOffer] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [showReport, setShowReport] = useState(false);
+  const [displayPrice, setDisplayPrice] = useState('');
 
   const gallery =
     product?.ImageUrls?.length > 0
@@ -94,12 +104,15 @@ export default function ProductDetailPage() {
         api.listReviews(id),
       ]);
       setProduct(detail.product);
+      setSeller(detail.seller || null);
       setActiveImage(0);
       setReviews(rev.reviews || []);
       setAverage(rev.average || 0);
+      if (detail.product) pushRecentlyViewed(detail.product);
     } catch (err) {
       setError(err.message || 'Product not found');
       setProduct(null);
+      setSeller(null);
     } finally {
       setLoading(false);
     }
@@ -108,6 +121,31 @@ export default function ProductDetailPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rates = await api.getCurrencyRates();
+        if (cancelled) return;
+        if (rates?.rates) setCurrencyRates(rates.rates);
+      } catch {
+        /* static fallback */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!product) {
+      setDisplayPrice('');
+      return;
+    }
+    const currency = user?.settings?.preferredCurrency || 'INR';
+    setDisplayPrice(formatMoney(product.Price, currency));
+  }, [product, user?.settings?.preferredCurrency]);
 
   useEffect(() => {
     if (!token || !id) {
@@ -261,6 +299,73 @@ export default function ProductDetailPage() {
     }
   }
 
+  async function addWishlist() {
+    if (!token) return navigate('/login');
+    setBusy(true);
+    setError('');
+    setOk('');
+    try {
+      await api.addWishlistItem(id, token);
+      setWishAdded(true);
+      setOk('Added to wishlist.');
+    } catch (err) {
+      setError(err.message || 'Could not update wishlist');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitOffer(e) {
+    e.preventDefault();
+    if (!token) return navigate('/login');
+    setBusy(true);
+    setError('');
+    setOk('');
+    try {
+      await api.createOffer(
+        {
+          product_id: id,
+          amount: Number(offerAmount),
+          message: offerMessage.trim(),
+        },
+        token,
+      );
+      setShowOffer(false);
+      setOfferAmount('');
+      setOfferMessage('');
+      setOk('Offer sent to the seller.');
+    } catch (err) {
+      setError(err.message || 'Could not send offer');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitReport(e) {
+    e.preventDefault();
+    if (!token) return navigate('/login');
+    setBusy(true);
+    setError('');
+    setOk('');
+    try {
+      await api.reportTarget(
+        {
+          targetType: 'product',
+          targetId: id,
+          reason: reportReason.trim(),
+        },
+        token,
+      );
+      setShowReport(false);
+      setReportReason('');
+      setOk('Report submitted. Thanks for helping keep Violet safe.');
+    } catch (err) {
+      setError(err.message || 'Could not submit report');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className="section">
@@ -296,7 +401,15 @@ export default function ProductDetailPage() {
           {average ? ` · ★ ${average}` : ''}
         </p>
         <h1>{product.Product_Name}</h1>
-        <p className="detail-price">{formatPrice(product.Price)}</p>
+        <p className="detail-price">{displayPrice || formatPrice(product.Price)}</p>
+        {seller?.username ? (
+          <p className="product-seller-link">
+            Sold by{' '}
+            <Link to={`/shop/${encodeURIComponent(seller.username)}`}>
+              {seller.shopName || seller.username}
+            </Link>
+          </p>
+        ) : null}
       </header>
 
       <div
@@ -376,6 +489,14 @@ export default function ProductDetailPage() {
           </button>
           <button
             type="button"
+            className={`icon-action${wishAdded ? ' is-favorited' : ''}`}
+            disabled={busy}
+            onClick={addWishlist}
+          >
+            <span>{wishAdded ? 'On wishlist' : 'Wishlist'}</span>
+          </button>
+          <button
+            type="button"
             className="icon-action"
             onClick={share}
             aria-label="Share product"
@@ -383,6 +504,18 @@ export default function ProductDetailPage() {
             <ShareIcon />
             <span>Share</span>
           </button>
+          {!isOwner ? (
+            <button
+              type="button"
+              className="icon-action"
+              onClick={() => {
+                if (!token) return navigate('/login');
+                setShowReport(true);
+              }}
+            >
+              <span>Report</span>
+            </button>
+          ) : null}
         </div>
 
         <div className="product-cta-row">
@@ -395,6 +528,16 @@ export default function ProductDetailPage() {
             >
               <ChatIcon />
               Message seller
+            </button>
+          ) : null}
+          {!sold && !isOwner && token ? (
+            <button
+              type="button"
+              className="btn btn-secondary product-cta"
+              disabled={busy}
+              onClick={() => setShowOffer(true)}
+            >
+              Make offer
             </button>
           ) : null}
           {!sold && !isOwner ? (
@@ -511,6 +654,103 @@ export default function ProductDetailPage() {
         </div>
       ) : null}
 
+      {showOffer && !isOwner ? (
+        <div className="msg-modal-overlay" role="presentation" onClick={() => setShowOffer(false)}>
+          <div
+            className="msg-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="msg-modal-head">
+              <div>
+                <p className="eyebrow">Offer</p>
+                <h2>Make an offer</h2>
+              </div>
+              <button type="button" className="icon-btn" aria-label="Close" onClick={() => setShowOffer(false)}>
+                ×
+              </button>
+            </div>
+            <form className="msg-modal-form" onSubmit={submitOffer}>
+              <div className="form-field">
+                <label htmlFor="offer-amount">Your offer (INR)</label>
+                <input
+                  id="offer-amount"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={offerAmount}
+                  onChange={(e) => setOfferAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="offer-message">Message (optional)</label>
+                <textarea
+                  id="offer-message"
+                  rows={3}
+                  value={offerMessage}
+                  onChange={(e) => setOfferMessage(e.target.value)}
+                />
+              </div>
+              {error ? <p className="status error">{error}</p> : null}
+              <div className="msg-modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowOffer(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  {busy ? 'Sending…' : 'Send offer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showReport ? (
+        <div className="msg-modal-overlay" role="presentation" onClick={() => setShowReport(false)}>
+          <div
+            className="msg-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="msg-modal-head">
+              <div>
+                <p className="eyebrow">Safety</p>
+                <h2>Report listing</h2>
+              </div>
+              <button type="button" className="icon-btn" aria-label="Close" onClick={() => setShowReport(false)}>
+                ×
+              </button>
+            </div>
+            <form className="msg-modal-form" onSubmit={submitReport}>
+              <div className="form-field">
+                <label htmlFor="report-reason">Reason</label>
+                <textarea
+                  id="report-reason"
+                  rows={3}
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  required
+                  minLength={3}
+                  placeholder="What’s wrong with this listing?"
+                />
+              </div>
+              {error ? <p className="status error">{error}</p> : null}
+              <div className="msg-modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowReport(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  {busy ? 'Sending…' : 'Submit report'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <div className="reviews product-detail-reviews">
         <h2>Reviews</h2>
         {reviews.length === 0 ? <p className="empty">No reviews yet.</p> : null}
@@ -521,6 +761,11 @@ export default function ProductDetailPage() {
                 ★ {r.rating} · {r.username}
               </strong>
               <p>{r.comment || '—'}</p>
+              {r.sellerReply ? (
+                <p className="seller-reply">
+                  <strong>Seller reply:</strong> {r.sellerReply}
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

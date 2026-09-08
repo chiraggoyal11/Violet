@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
-import ProductCard, { SkeletonGrid } from '../components/ProductCard';
+import ProductCard, { SkeletonGrid, formatPrice } from '../components/ProductCard';
 import { PRODUCT_CATEGORIES } from '../data/categories';
+import { getRecentlyViewed } from '../utils/recentlyViewed';
 
 const PAGE_SIZE = 12;
 const ALL_PAGE_SIZE = 24;
@@ -57,13 +58,24 @@ export default function CatalogPage() {
   const initialPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const [query, setQuery] = useState(searchParams.get('q') || '');
-  const [draft, setDraft] = useState({ ...emptyDraft, category: initialCategory });
+  const [draft, setDraft] = useState({
+    ...emptyDraft,
+    category: initialCategory,
+    colour: searchParams.get('colour') || '',
+    minPrice: searchParams.get('minPrice') || '',
+    maxPrice: searchParams.get('maxPrice') || '',
+    status: searchParams.get('status') || 'active',
+  });
   const [sort, setSort] = useState(searchParams.get('sort') || 'newest');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
     name: searchParams.get('q') || '',
     ...emptyDraft,
     category: initialCategory,
+    colour: searchParams.get('colour') || '',
+    minPrice: searchParams.get('minPrice') || '',
+    maxPrice: searchParams.get('maxPrice') || '',
+    status: searchParams.get('status') || 'active',
     sort: searchParams.get('sort') || 'newest',
   });
   const [page, setPage] = useState(initialPage);
@@ -75,6 +87,7 @@ export default function CatalogPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const [recent, setRecent] = useState(() => getRecentlyViewed());
 
   useEffect(() => {
     let cancelled = false;
@@ -160,10 +173,28 @@ export default function CatalogPage() {
     const next = new URLSearchParams();
     if (filters.name) next.set('q', filters.name);
     if (filters.category) next.set('category', filters.category);
+    if (filters.colour) next.set('colour', filters.colour);
+    if (filters.minPrice !== '') next.set('minPrice', String(filters.minPrice));
+    if (filters.maxPrice !== '') next.set('maxPrice', String(filters.maxPrice));
+    if (filters.status && filters.status !== 'active') next.set('status', filters.status);
     if (filters.sort && filters.sort !== 'newest') next.set('sort', filters.sort);
     if (page > 1) next.set('page', String(page));
     setSearchParams(next, { replace: true });
-  }, [filters.name, filters.category, filters.sort, page, setSearchParams]);
+  }, [
+    filters.name,
+    filters.category,
+    filters.colour,
+    filters.minPrice,
+    filters.maxPrice,
+    filters.status,
+    filters.sort,
+    page,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    setRecent(getRecentlyViewed());
+  }, [filters, page]);
 
   const activeFilterCount = useMemo(() => {
     let n = 0;
@@ -465,6 +496,34 @@ export default function CatalogPage() {
               </div>
             </form>
           </div>
+        </div>
+      ) : null}
+
+      {recent.length > 0 ? (
+        <div className="recently-viewed-strip" aria-label="Recently viewed">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Continue</p>
+              <h3>Recently viewed</h3>
+            </div>
+          </div>
+          <ul className="recently-viewed-list">
+            {recent.slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <Link to={`/product/${item.id}`} className="recently-viewed-item">
+                  {item.image ? (
+                    <img src={item.image} alt="" />
+                  ) : (
+                    <span className="recently-viewed-fallback" aria-hidden="true" />
+                  )}
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>{formatPrice(item.price)}</small>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

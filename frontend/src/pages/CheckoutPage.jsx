@@ -90,6 +90,9 @@ export default function CheckoutPage() {
   const [receipt, setReceipt] = useState(null);
   const [pendingOrderId, setPendingOrderId] = useState('');
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(null);
+  const [couponBusy, setCouponBusy] = useState(false);
 
   const profileAddress = user?.address || emptyAddress;
   const profileReady = hasProfileAddress(profileAddress);
@@ -333,6 +336,27 @@ export default function CheckoutPage() {
     setStep('payment');
   }
 
+  async function applyCoupon(e) {
+    e.preventDefault();
+    if (!couponCode.trim()) return;
+    setCouponBusy(true);
+    setError('');
+    try {
+      const data = await api.validateCoupon(couponCode.trim(), total, token);
+      setCouponDiscount({
+        code: data.coupon?.code || couponCode.trim().toUpperCase(),
+        discount: data.discount,
+        total: data.total,
+      });
+      setCouponCode(data.coupon?.code || couponCode.trim().toUpperCase());
+    } catch (err) {
+      setCouponDiscount(null);
+      setError(err.message || 'Invalid coupon');
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
   async function payAndPlaceOrder(e) {
     e.preventDefault();
     setBusy(true);
@@ -352,6 +376,7 @@ export default function CheckoutPage() {
           shippingAddress: address,
           paymentMethod,
           payment: paymentPayload,
+          couponCode: couponDiscount?.code || couponCode || undefined,
         },
         token,
       );
@@ -902,6 +927,36 @@ export default function CheckoutPage() {
             />
           </div>
 
+          <div className="coupon-row">
+            <label className="visually-hidden" htmlFor="couponCode">
+              Coupon code
+            </label>
+            <input
+              id="couponCode"
+              value={couponCode}
+              onChange={(e) => {
+                setCouponCode(e.target.value);
+                setCouponDiscount(null);
+              }}
+              placeholder="Coupon code"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={couponBusy || !couponCode.trim()}
+              onClick={applyCoupon}
+            >
+              {couponBusy ? 'Checking…' : 'Apply'}
+            </button>
+          </div>
+          {couponDiscount ? (
+            <p className="status ok">
+              Coupon {couponDiscount.code} applied · −{formatPrice(couponDiscount.discount)} · new
+              total {formatPrice(couponDiscount.total)}
+            </p>
+          ) : null}
+
           <div className="form-actions">
             <button
               type="button"
@@ -937,6 +992,37 @@ export default function CheckoutPage() {
                   ? `Pay with UPI, Card, or Cash on delivery. UPI asks you to approve in your app within ${upiTimeoutLabel} — otherwise payment fails.`
                   : 'Pay securely with Razorpay Checkout, or choose Cash on delivery.'}
               </p>
+              {payConfig?.razorpayEnabled || payConfig?.demo === false ? (
+                <p className="payment-provider-note">
+                  Online card/UPI may open Razorpay Checkout when configured on the server.
+                </p>
+              ) : null}
+
+              <div className="coupon-row">
+                <input
+                  value={couponCode}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value);
+                    setCouponDiscount(null);
+                  }}
+                  placeholder="Coupon code"
+                  autoComplete="off"
+                  aria-label="Coupon code"
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={couponBusy || !couponCode.trim()}
+                  onClick={applyCoupon}
+                >
+                  {couponBusy ? 'Checking…' : 'Apply'}
+                </button>
+              </div>
+              {couponDiscount ? (
+                <p className="muted-link">
+                  Discount {formatPrice(couponDiscount.discount)} with {couponDiscount.code}
+                </p>
+              ) : null}
 
               <div className="payment-method-tabs payment-method-tabs-3" role="tablist" aria-label="Payment method">
                 <button
@@ -1039,15 +1125,18 @@ export default function CheckoutPage() {
               {paymentMethod === 'cod' ? (
                 <div className="payment-cod-note">
                   <p>
-                    Pay <strong>{formatPrice(total)}</strong> in cash when your order is
-                    delivered. No online charge now.
+                    Pay{' '}
+                    <strong>
+                      {formatPrice(couponDiscount?.total || total)}
+                    </strong>{' '}
+                    in cash when your order is delivered. No online charge now.
                   </p>
                 </div>
               ) : null}
 
               <div className="checkout-pay-summary">
                 <span>Amount due</span>
-                <strong>{formatPrice(total)}</strong>
+                <strong>{formatPrice(couponDiscount?.total || total)}</strong>
               </div>
 
               <div className="form-actions">
@@ -1061,8 +1150,8 @@ export default function CheckoutPage() {
                 </button>
                 <button className="btn btn-accent" type="submit" disabled={busy}>
                   {paymentMethod === 'cod'
-                    ? `Place order · ${formatPrice(total)}`
-                    : `Pay ${formatPrice(total)}`}
+                    ? `Place order · ${formatPrice(couponDiscount?.total || total)}`
+                    : `Pay ${formatPrice(couponDiscount?.total || total)}`}
                 </button>
               </div>
             </form>

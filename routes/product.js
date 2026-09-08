@@ -25,6 +25,36 @@ function parsePagination(query) {
   return { page, limit, skip };
 }
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Build a tolerant name query: exact regex + optional text index + character-class fuzzy. */
+function buildNameFilter(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return null;
+  const tokens = raw.split(/\s+/).filter(Boolean).slice(0, 6);
+  const or = [
+    { Product_Name: { $regex: escapeRegex(raw), $options: 'i' } },
+    { Product_Detail: { $regex: escapeRegex(raw), $options: 'i' } },
+  ];
+  // Soft typo tolerance: allow one optional char between letters for short tokens.
+  for (const token of tokens) {
+    if (token.length < 3 || token.length > 12) continue;
+    const soft = token
+      .split('')
+      .map((ch) => escapeRegex(ch))
+      .join('.?');
+    or.push({ Product_Name: { $regex: soft, $options: 'i' } });
+  }
+  try {
+    or.push({ $text: { $search: raw } });
+  } catch {
+    /* text index may be missing on fresh DB */
+  }
+  return { $or: or };
+}
+
 function buildListQuery(query, { includeDeleted = false } = {}) {
   const queryObject = {};
   if (!includeDeleted) {
@@ -34,7 +64,8 @@ function buildListQuery(query, { includeDeleted = false } = {}) {
     queryObject.status = query.status;
   }
   if (query.name) {
-    queryObject.Product_Name = { $regex: query.name, $options: 'i' };
+    const nameFilter = buildNameFilter(query.name);
+    if (nameFilter) Object.assign(queryObject, nameFilter);
   }
   if (query.category && Product.CATEGORIES.includes(query.category)) {
     queryObject.category = query.category;
@@ -45,8 +76,6 @@ function buildListQuery(query, { includeDeleted = false } = {}) {
   const min = query.minPrice !== undefined ? Number(query.minPrice) : null;
   const max = query.maxPrice !== undefined ? Number(query.maxPrice) : null;
   if ((min !== null && Number.isFinite(min)) || (max !== null && Number.isFinite(max))) {
-    // Price stored as string — compare numerically via $expr after fetch is heavy;
-    // keep simple regex-free filter using $toDouble when possible.
     const priceExpr = { $toDouble: { $ifNull: ['$Price', '0'] } };
     const and = [];
     if (min !== null && Number.isFinite(min)) and.push({ $gte: [priceExpr, min] });
@@ -164,7 +193,23 @@ router.get('/detail/:id', async (req, res) => {
       return res.status(404).json({ success: false, msg: 'Product not found' });
     }
     await attachImageUrls([product]);
-    return res.status(200).json({ success: true, product });
+    const User = require('../models/user');
+    const seller = await User.findById(product.user_id).select(
+      'username shopName bio avatar',
+    );
+    return res.status(200).json({
+      success: true,
+      product,
+      seller: seller
+        ? {
+            _id: seller._id,
+            username: seller.username,
+            shopName: seller.shopName || seller.username,
+            bio: seller.bio || '',
+            avatar: seller.avatar,
+          }
+        : null,
+    });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ success: false, msg: 'Failed to load product' });
@@ -378,9 +423,26 @@ router.put('/:id', user_jwt, async (req, res) => {
       return res.status(400).json({ success: false, msg: 'Invalid colour' });
     }
     if (product.stock !== undefined) {
+      const prevStock = product.stock;
       product.stock = Math.max(0, Number(product.stock) || 0);
       if (product.stock === 0 && product.status === 'active') product.status = 'sold';
       if (product.stock > 0 && product.status === 'sold') product.status = 'active';
+      // Inventory alert when crossing below threshold
+      const threshold = Number(product.lowStockThreshold) || 2;
+      if (prevStock > threshold && product.stock <= threshold) {
+        const User = require('../models/user');
+        const { notifyUser } = require('../utils/notifications');
+        const seller = await User.findById(product.user_id).select('settings');
+        if (seller?.settings?.stockAlerts !== false) {
+          await notifyUser({
+            user_id: product.user_id,
+            type: 'system',
+            title: 'Low stock alert',
+            body: `${product.Product_Name} has ${product.stock} left`,
+            link: '/mine',
+          });
+        }
+      }
     }
 
     await product.save();
@@ -388,6 +450,40 @@ router.put('/:id', user_jwt, async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(500).json({ success: false, msg: 'Failed to update product' });
+  }
+});
+
+/** Reorder gallery images (cover = first). */
+router.put('/:id/images/order', user_jwt, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product || product.status === 'deleted') {
+      return res.status(404).json({ success: false, msg: "Product doesn't exist." });
+    }
+    if (String(product.user_id) !== String(req.user.id)) {
+      return res.status(403).json({ success: false, msg: 'Not allowed' });
+    }
+    const order = Array.isArray(req.body.images) ? req.body.images.map(String) : [];
+    if (!order.length) {
+      return res.status(400).json({ success: false, msg: 'images array required' });
+    }
+    const current = Array.isArray(product.Images) && product.Images.length
+      ? product.Images.map(String)
+      : product.Image
+        ? [String(product.Image)]
+        : [];
+    const set = new Set(current);
+    if (order.length !== current.length || order.some((k) => !set.has(k))) {
+      return res.status(400).json({ success: false, msg: 'Image list must match existing keys' });
+    }
+    product.Images = order;
+    product.Image = order[0] || product.Image;
+    await product.save();
+    await attachImageUrls([product]);
+    return res.status(200).json({ success: true, product });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, msg: 'Failed to reorder images' });
   }
 });
 

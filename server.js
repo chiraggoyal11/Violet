@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const express = require('express');
 const colors = require('colors');
 const morgan = require('morgan');
@@ -9,6 +10,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/db');
 const { isMongoReady, requireMongo } = require('./utils/mongo');
+const { initRealtime } = require('./utils/realtime');
 
 dotenv.config({
   path: './config/config.env'
@@ -19,9 +21,6 @@ const app = express();
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
-  // Allow Google Identity Services popup to postMessage the ID token back.
-  // Default "same-origin" severs window.opener and leaves a blank
-  // accounts.google.com/gsi/transform page after sign-in.
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }
 }));
 app.use(morgan('dev'));
@@ -43,8 +42,6 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, msg: 'Too many requests, try again later' },
-  // Session refresh (GET /) and public config must not share the login/register budget —
-  // otherwise normal browsing clears auth and breaks checkout.
   skip: (req) => req.method === 'GET',
 });
 
@@ -56,13 +53,33 @@ app.get('/api/violet/health', (req, res) => {
   const mongo = isMongoReady();
   res.status(200).json({
     success: true,
-    version: 3,
+    version: 4,
     mongo,
-    features: ['multi-image', 'messages', 'notifications', 'password-reset', 'google-oauth']
+    features: [
+      'multi-image',
+      'messages',
+      'notifications',
+      'password-reset',
+      'google-oauth',
+      'order-tracking',
+      'returns',
+      'shops',
+      'coupons',
+      'offers',
+      'wishlists',
+      'admin',
+      'guest-checkout',
+      'realtime-messaging',
+      'payouts',
+      'currency-display',
+      'push-subscribe',
+      'reports',
+    ],
   });
 });
 
 app.use('/api/violet/auth', authLimiter, require('./routes/user'));
+app.use('/api/violet/guest', requireMongo, require('./routes/guest'));
 app.use('/api/violet/products', require('./routes/product'));
 app.use('/api/violet/favorites', requireMongo, require('./routes/favorites'));
 app.use('/api/violet/cart', requireMongo, require('./routes/cart'));
@@ -70,6 +87,14 @@ app.use('/api/violet/orders', requireMongo, require('./routes/orders'));
 app.use('/api/violet/reviews', requireMongo, require('./routes/reviews'));
 app.use('/api/violet/messages', requireMongo, require('./routes/messages'));
 app.use('/api/violet/notifications', requireMongo, require('./routes/notifications'));
+app.use('/api/violet/shops', requireMongo, require('./routes/shops'));
+app.use('/api/violet/coupons', requireMongo, require('./routes/coupons'));
+app.use('/api/violet/reports', requireMongo, require('./routes/reports'));
+app.use('/api/violet/wishlists', requireMongo, require('./routes/wishlists'));
+app.use('/api/violet/admin', requireMongo, require('./routes/admin'));
+app.use('/api/violet/payouts', requireMongo, require('./routes/payouts'));
+app.use('/api/violet/offers', requireMongo, require('./routes/offers'));
+app.use('/api/violet/platform', require('./routes/platform'));
 
 const { s3Configured, ensureBucket } = require('./utils/s3');
 if (s3Configured) {
@@ -91,7 +116,9 @@ if (fs.existsSync(frontendDist)) {
 const PORT = process.env.PORT || 5000;
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = http.createServer(app);
+  initRealtime(server);
+  server.listen(PORT, () => {
     console.log(`server is running on port ${PORT}`.green.underline.bold);
   });
 }

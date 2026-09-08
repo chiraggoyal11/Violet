@@ -170,6 +170,20 @@ router.post('/', user_jwt, async (req, res) => {
       link: `/messages/${conv._id}`
     });
 
+    try {
+      const { emitToConversation, emitToUser } = require('../utils/realtime');
+      emitToConversation(conv._id, 'message:new', {
+        conversationId: String(conv._id),
+        message,
+      });
+      emitToUser(recipientId, 'message:new', {
+        conversationId: String(conv._id),
+        message,
+      });
+    } catch {
+      /* realtime optional */
+    }
+
     const hydrated = await hydrateConversation(conv, userId);
     return res.status(200).json({
       success: true,

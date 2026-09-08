@@ -23,15 +23,53 @@ const shippingAddressSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const timelineEventSchema = new mongoose.Schema(
+  {
+    status: { type: String, required: true },
+    note: { type: String, default: '' },
+    at: { type: Date, default: Date.now },
+    by: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const returnRequestSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ['none', 'requested', 'approved', 'rejected', 'refunded'],
+      default: 'none',
+    },
+    reason: { type: String, default: '' },
+    requestedAt: { type: Date, default: null },
+    resolvedAt: { type: Date, default: null },
+    refundAmount: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     buyer_id: { type: String, required: true, index: true },
     items: { type: [orderItemSchema], required: true },
     total: { type: String, required: true },
+    subtotal: { type: String, default: '' },
+    discount: { type: String, default: '0.00' },
+    couponCode: { type: String, default: '' },
     status: {
       type: String,
-      enum: ['placed', 'cancelled'],
-      default: 'placed'
+      enum: ['placed', 'shipped', 'delivered', 'cancelled', 'returned'],
+      default: 'placed',
+      index: true,
+    },
+    timeline: { type: [timelineEventSchema], default: [] },
+    trackingNumber: { type: String, default: '' },
+    carrier: { type: String, default: '' },
+    shippedAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
+    returnRequest: {
+      type: returnRequestSchema,
+      default: () => ({ status: 'none' }),
     },
     note: { type: String, default: '' },
     shippingAddress: {
@@ -45,7 +83,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ['pending', 'paid', 'failed'],
+      enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'pending'
     },
     paymentRef: { type: String, trim: true, default: '' },
@@ -53,9 +91,26 @@ const orderSchema = new mongoose.Schema(
     paymentDetail: { type: String, trim: true, default: '' },
     paidAt: { type: Date, default: null },
     paymentExpiresAt: { type: Date, default: null },
-    razorpayOrderId: { type: String, trim: true, default: '' }
+    razorpayOrderId: { type: String, trim: true, default: '' },
+    isGuest: { type: Boolean, default: false },
+    guestEmail: { type: String, default: '' },
+    guestPhone: { type: String, default: '' },
   },
   { timestamps: true }
 );
+
+orderSchema.pre('save', function ensureTimeline(next) {
+  if (!this.timeline || this.timeline.length === 0) {
+    this.timeline = [
+      {
+        status: this.status || 'placed',
+        note: 'Order placed',
+        at: this.createdAt || new Date(),
+        by: 'system',
+      },
+    ];
+  }
+  next();
+});
 
 module.exports = mongoose.model('Order', orderSchema);

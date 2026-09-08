@@ -13,6 +13,23 @@ function isOnlinePending(order) {
   );
 }
 
+function Timeline({ events }) {
+  if (!events?.length) return null;
+  return (
+    <ol className="order-timeline">
+      {events.map((ev, idx) => (
+        <li key={`${ev.at || idx}-${ev.status}`}>
+          <strong>{ev.status?.replace(/_/g, ' ') || 'update'}</strong>
+          {ev.note ? <span>{ev.note}</span> : null}
+          {ev.at ? (
+            <time>{new Date(ev.at).toLocaleString()}</time>
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export default function OrdersPage() {
   const { user, token, booting } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -20,6 +37,7 @@ export default function OrdersPage() {
   const [ok, setOk] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
+  const [returnReason, setReturnReason] = useState({});
 
   async function loadOrders() {
     if (!token) return;
@@ -71,6 +89,38 @@ export default function OrdersPage() {
     }
   }
 
+  async function markDelivered(orderId) {
+    setBusyId(orderId);
+    setError('');
+    setOk('');
+    try {
+      await api.updateOrderStatus(orderId, { status: 'delivered' }, token);
+      setOk('Marked as delivered.');
+      await loadOrders();
+    } catch (err) {
+      setError(err.message || 'Could not update order');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function submitReturn(orderId) {
+    const reason = String(returnReason[orderId] || '').trim();
+    setBusyId(orderId);
+    setError('');
+    setOk('');
+    try {
+      await api.requestReturn(orderId, reason, token);
+      setOk('Return requested.');
+      setReturnReason((prev) => ({ ...prev, [orderId]: '' }));
+      await loadOrders();
+    } catch (err) {
+      setError(err.message || 'Could not request return');
+    } finally {
+      setBusyId('');
+    }
+  }
+
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
 
@@ -115,6 +165,11 @@ export default function OrdersPage() {
       <div className="order-list">
         {orders.map((order) => {
           const pending = isOnlinePending(order);
+          const returnStatus = order.returnRequest?.status;
+          const canReturn =
+            order.status === 'delivered' &&
+            (!returnStatus || returnStatus === 'none');
+          const canMarkDelivered = order.status === 'shipped';
           return (
             <article
               key={order._id}
@@ -176,7 +231,22 @@ export default function OrdersPage() {
                   {order.paymentProvider ? ` · ${order.paymentProvider}` : ''}
                 </p>
               ) : null}
+              {order.trackingNumber || order.carrier ? (
+                <p className="order-note">
+                  Tracking:{' '}
+                  {[order.carrier, order.trackingNumber].filter(Boolean).join(' · ')}
+                </p>
+              ) : null}
               {order.note ? <p className="order-note">Note: {order.note}</p> : null}
+              {returnStatus && returnStatus !== 'none' ? (
+                <p className="order-note">
+                  Return: {returnStatus}
+                  {order.returnRequest?.reason ? ` · ${order.returnRequest.reason}` : ''}
+                </p>
+              ) : null}
+
+              <Timeline events={order.timeline} />
+
               {pending ? (
                 <div className="order-pending-actions form-actions">
                   <Link
@@ -192,6 +262,45 @@ export default function OrdersPage() {
                     onClick={() => cancelPending(order._id)}
                   >
                     {busyId === order._id ? 'Cancelling…' : 'Cancel payment'}
+                  </button>
+                </div>
+              ) : null}
+
+              {canMarkDelivered ? (
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="btn btn-accent"
+                    disabled={busyId === order._id}
+                    onClick={() => markDelivered(order._id)}
+                  >
+                    Mark delivered
+                  </button>
+                </div>
+              ) : null}
+
+              {canReturn ? (
+                <div className="return-request-row">
+                  <label className="form-field">
+                    <span>Request return</span>
+                    <input
+                      value={returnReason[order._id] || ''}
+                      onChange={(e) =>
+                        setReturnReason((prev) => ({
+                          ...prev,
+                          [order._id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Why are you returning this?"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busyId === order._id}
+                    onClick={() => submitReturn(order._id)}
+                  >
+                    Request return
                   </button>
                 </div>
               ) : null}

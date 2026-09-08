@@ -6,7 +6,11 @@ const reviewSchema = new mongoose.Schema(
     user_id: { type: String, required: true, index: true },
     username: { type: String, required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
-    comment: { type: String, default: '', trim: true, maxlength: 1000 }
+    comment: { type: String, default: '', trim: true, maxlength: 1000 },
+    photos: { type: [String], default: [] },
+    sellerReply: { type: String, default: '', trim: true, maxlength: 1000 },
+    sellerRepliedAt: { type: Date, default: null },
+    editedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

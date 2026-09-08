@@ -1,7 +1,7 @@
 {
   "name": "violet",
   "version": "1.0.0",
-  "description": "Violet marketplace \u2014 Express API + React frontend",
+  "description": "Violet marketplace — Express API + React frontend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -22,6 +22,7 @@
     "@aws-sdk/client-s3": "^3.699.0",
     "@aws-sdk/s3-request-presigner": "^3.699.0",
     "bcryptjs": "^2.4.3",
+    "colors": "^1.4.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
@@ -31,8 +32,8 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.7.0",
+    "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "colors": "^1.4.0",
-    "morgan": "^1.10.0"
+    "socket.io": "^4.8.3"
   }
 }

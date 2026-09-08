@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { refreshMessageBadge } from '../components/BottomNav';
+import { getSocket } from '../utils/socket';
 
 function initials(name) {
   const parts = String(name || '?').trim().split(/\s+/);
@@ -103,8 +104,11 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
+  const [typingUser, setTypingUser] = useState('');
   const listRef = useRef(null);
   const inputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const socketRef = useRef(null);
 
   async function loadInbox() {
     const data = await api.listConversations(token);
@@ -139,12 +143,68 @@ export default function MessagesPage() {
       setActive(null);
       setMessages([]);
       setLoading(false);
-      return;
+      return undefined;
     }
     loadThread(id);
+
+    const socket = getSocket(user?._id);
+    socketRef.current = socket;
+    let usePolling = true;
+
+    if (socket) {
+      const onConnect = () => {
+        usePolling = false;
+        socket.emit('join_conversation', id);
+      };
+      const onDisconnect = () => {
+        usePolling = true;
+      };
+      const onNew = (payload) => {
+        const msg = payload?.message;
+        const convoId = payload?.conversationId || payload?.conversation?._id;
+        if (!msg) return;
+        if (convoId && String(convoId) !== String(id)) return;
+        setMessages((prev) => {
+          if (prev.some((m) => String(m._id) === String(msg._id))) return prev;
+          return [...prev, msg];
+        });
+        loadInbox().catch(() => {});
+      };
+      const onTyping = (payload) => {
+        if (String(payload?.conversationId) !== String(id)) return;
+        if (String(payload?.userId) === String(user?._id)) return;
+        setTypingUser(payload?.username || 'Someone');
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setTypingUser(''), 1800);
+      };
+
+      socket.on('connect', onConnect);
+      socket.on('disconnect', onDisconnect);
+      socket.on('message:new', onNew);
+      socket.on('typing', onTyping);
+      if (socket.connected) onConnect();
+      else socket.connect();
+
+      const poll = setInterval(() => {
+        if (usePolling || !socket.connected) {
+          loadThread(id, { silent: true });
+        }
+      }, 12000);
+
+      return () => {
+        socket.emit('leave_conversation', id);
+        socket.off('connect', onConnect);
+        socket.off('disconnect', onDisconnect);
+        socket.off('message:new', onNew);
+        socket.off('typing', onTyping);
+        clearInterval(poll);
+        clearTimeout(typingTimeoutRef.current);
+      };
+    }
+
     const poll = setInterval(() => loadThread(id, { silent: true }), 8000);
     return () => clearInterval(poll);
-  }, [id, token]);
+  }, [id, token, user?._id]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -226,6 +286,15 @@ export default function MessagesPage() {
       e.preventDefault();
       if (!busy && body.trim()) send(e);
     }
+  }
+
+  function emitTyping() {
+    const socket = socketRef.current || getSocket(user?._id);
+    if (!socket || !id) return;
+    socket.emit('typing', {
+      conversationId: id,
+      username: user?.username,
+    });
   }
 
   if (booting) return <p className="empty">Checking your session…</p>;
@@ -394,7 +463,10 @@ export default function MessagesPage() {
                     ref={inputRef}
                     rows={1}
                     value={body}
-                    onChange={(e) => setBody(e.target.value)}
+                    onChange={(e) => {
+                      setBody(e.target.value);
+                      emitTyping();
+                    }}
                     onKeyDown={onComposerKeyDown}
                     placeholder="Write a message…"
                     required
@@ -408,7 +480,9 @@ export default function MessagesPage() {
                     {busy ? <span className="composer-spin" /> : <SendIcon />}
                   </button>
                 </div>
-                <p className="composer-hint">Enter to send · Shift+Enter for a new line</p>
+                <p className="composer-hint">
+                  {typingUser ? `${typingUser} is typing…` : 'Enter to send · Shift+Enter for a new line'}
+                </p>
               </form>
             ) : null}
           </>

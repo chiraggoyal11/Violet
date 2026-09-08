@@ -6,6 +6,15 @@ const ORDER_BASE = '/api/violet/orders';
 const REVIEW_BASE = '/api/violet/reviews';
 const MSG_BASE = '/api/violet/messages';
 const NOTE_BASE = '/api/violet/notifications';
+const SHOP_BASE = '/api/violet/shops';
+const COUPON_BASE = '/api/violet/coupons';
+const ADMIN_BASE = '/api/violet/admin';
+const WISHLIST_BASE = '/api/violet/wishlists';
+const PAYOUT_BASE = '/api/violet/payouts';
+const OFFER_BASE = '/api/violet/offers';
+const PLATFORM_BASE = '/api/violet/platform';
+const GUEST_BASE = '/api/violet/guest';
+const REPORT_BASE = '/api/violet/reports';
 
 const GATEWAY_STATUSES = new Set([502, 503, 504]);
 const WAKE_RETRY_MS = [0, 2000, 4000, 8000, 12000, 16000, 20000];
@@ -286,4 +295,106 @@ export const api = {
     request(NOTE_BASE, '/read-all', { method: 'PUT', token }),
   markNotificationRead: (id, token) =>
     request(NOTE_BASE, `/${id}/read`, { method: 'PUT', token }),
+
+  getShop: (username) => request(SHOP_BASE, `/${encodeURIComponent(username)}`),
+
+  validateCoupon: (code, subtotal, token) =>
+    request(COUPON_BASE, '/validate', {
+      method: 'POST',
+      body: { code, subtotal },
+      token,
+    }),
+
+  listAdminOverview: (token) => request(ADMIN_BASE, '/overview', { token }),
+  listAdminUsers: (q, token) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    const qs = params.toString();
+    return request(ADMIN_BASE, `/users${qs ? `?${qs}` : ''}`, { token });
+  },
+  listAdminReports: (token) => request(ADMIN_BASE, '/reports', { token }),
+  patchAdminUser: (id, payload, token) =>
+    request(ADMIN_BASE, `/users/${id}`, { method: 'PATCH', body: payload, token }),
+  patchAdminReport: (id, payload, token) =>
+    request(ADMIN_BASE, `/reports/${id}`, { method: 'PATCH', body: payload, token }),
+  patchAdminProduct: (id, payload, token) =>
+    request(ADMIN_BASE, `/products/${id}`, { method: 'PATCH', body: payload, token }),
+  deleteAdminReview: (id, token) =>
+    request(ADMIN_BASE, `/reviews/${id}`, { method: 'DELETE', token }),
+
+  getWishlist: (token) => request(WISHLIST_BASE, '/mine', { token }),
+  addWishlistItem: (productId, token) =>
+    request(WISHLIST_BASE, '/mine/items', {
+      method: 'POST',
+      body: { product_id: productId },
+      token,
+    }),
+  removeWishlistItem: (productId, token) =>
+    request(WISHLIST_BASE, `/mine/items/${productId}`, { method: 'DELETE', token }),
+  getSharedWishlist: (shareToken) =>
+    request(WISHLIST_BASE, `/shared/${encodeURIComponent(shareToken)}`),
+
+  getPayouts: (token) => request(PAYOUT_BASE, '/mine', { token }),
+  requestPayout: (payload, token) =>
+    request(PAYOUT_BASE, '/request', { method: 'POST', body: payload, token }),
+
+  createOffer: (payload, token) =>
+    request(OFFER_BASE, '/', { method: 'POST', body: payload, token }),
+  updateOffer: (id, payload, token) =>
+    request(OFFER_BASE, `/${id}`, { method: 'PATCH', body: payload, token }),
+  listOffers: (token) => request(OFFER_BASE, '/mine', { token }),
+
+  getCurrencyRates: () => request(PLATFORM_BASE, '/rates'),
+  subscribePush: (subscription, token) =>
+    request(PLATFORM_BASE, '/subscribe', {
+      method: 'POST',
+      body: { subscription },
+      token,
+    }),
+  unsubscribePush: (token) =>
+    request(PLATFORM_BASE, '/subscribe', { method: 'DELETE', token }),
+  getVapidKey: () => request(PLATFORM_BASE, '/vapid-public-key'),
+
+  guestSession: (payload) =>
+    request(GUEST_BASE, '/session', { method: 'POST', body: payload }),
+
+  updateOrderStatus: (orderId, payload, token) =>
+    request(ORDER_BASE, `/${orderId}/status`, {
+      method: 'POST',
+      body: payload,
+      token,
+    }),
+  requestReturn: (orderId, reason, token) =>
+    request(ORDER_BASE, `/${orderId}/return`, {
+      method: 'POST',
+      body: { reason },
+      token,
+    }),
+  resolveReturn: (orderId, decision, token) =>
+    request(ORDER_BASE, `/${orderId}/return/resolve`, {
+      method: 'POST',
+      body: { decision },
+      token,
+    }),
+
+  replyToReview: (reviewId, reply, token) =>
+    request(REVIEW_BASE, `/${reviewId}/reply`, {
+      method: 'POST',
+      body: { reply },
+      token,
+    }),
+
+  reorderProductImages: (productId, images, token) =>
+    request(PRODUCT_BASE, `/${productId}/images/order`, {
+      method: 'PUT',
+      body: { images },
+      token,
+    }),
+
+  reportTarget: (payload, token) =>
+    request(REPORT_BASE, '/', { method: 'POST', body: payload, token }),
+  blockUser: (userId, token) =>
+    request(REPORT_BASE, `/block/${userId}`, { method: 'POST', token }),
+  unblockUser: (userId, token) =>
+    request(REPORT_BASE, `/block/${userId}`, { method: 'DELETE', token }),
 };
