@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
+import { PRODUCT_CATEGORIES } from '../data/categories';
 
 const PREVIEW_LIMIT = 8;
 
@@ -29,7 +30,7 @@ function groupByCategory(products, categoryOrder) {
 export default function HomePage() {
   const { user, booting } = useAuth();
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState(['Home', 'Fashion', 'Art', 'Food', 'Other']);
+  const [categories] = useState(PRODUCT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
@@ -49,9 +50,7 @@ export default function HomePage() {
           page: 1,
           limit: 1,
         });
-        const cats = meta.categories?.length
-          ? meta.categories
-          : ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+        const cats = PRODUCT_CATEGORIES;
         const pages = await Promise.all(
           cats.map((category) =>
             api.listProducts({
@@ -75,7 +74,6 @@ export default function HomePage() {
         setProducts(merged);
         setTotalPages(maxPages);
         setTotal(sumTotal || meta.total || merged.length);
-        setCategories(cats);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not load products');
       } finally {

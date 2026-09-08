@@ -110,9 +110,7 @@ export default function CatalogPage() {
             page: 1,
             limit: 1,
           });
-          const cats = meta.categories?.length
-            ? meta.categories
-            : ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+          const cats = PRODUCT_CATEGORIES;
           const perCategory = Math.max(4, Math.ceil(ALL_PAGE_SIZE / Math.max(cats.length, 1)));
           const pages = await Promise.all(
             cats.map((category) =>
@@ -137,7 +135,7 @@ export default function CatalogPage() {
             setProducts(merged);
             setTotalPages(maxPages);
             setTotal(sumTotal || meta.total || merged.length);
-            setCategories(cats);
+            setCategories(PRODUCT_CATEGORIES);
             if (meta.colours) setColours(meta.colours);
           });
         } else {
@@ -151,7 +149,7 @@ export default function CatalogPage() {
             setProducts(data.product || []);
             setTotalPages(data.totalPages || 1);
             setTotal(data.total || 0);
-            if (data.categories) setCategories(data.categories);
+            setCategories(PRODUCT_CATEGORIES);
             if (data.colours) setColours(data.colours);
           });
         }
@@ -342,7 +340,7 @@ export default function CatalogPage() {
           >
             All
           </button>
-          {(categories.length ? categories : ['Home', 'Fashion', 'Art', 'Food', 'Other']).map((c) => (
+          {PRODUCT_CATEGORIES.map((c) => (
             <button
               key={c}
               type="button"
@@ -426,7 +424,7 @@ export default function CatalogPage() {
                   onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
                 >
                   <option value="">All categories</option>
-                  {categories.map((c) => (
+                  {PRODUCT_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
