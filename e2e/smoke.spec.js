@@ -45,7 +45,7 @@ test('catalog product opens detail page', async ({ page, request }) => {
       Product_Name: productName,
       Product_Detail: 'Handmade test listing',
       Price: '19.99',
-      category: 'Home',
+      category: 'Home & Living',
     },
   });
 

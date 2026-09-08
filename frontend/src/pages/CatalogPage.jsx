@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
+import { PRODUCT_CATEGORIES } from '../data/categories';
 
 const PAGE_SIZE = 12;
 const SORTS = [
@@ -33,7 +34,7 @@ export default function CatalogPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
   const [colours, setColours] = useState([]);
   const [products, setProducts] = useState([]);
   const [error, setError] = useState('');

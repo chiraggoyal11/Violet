@@ -28,6 +28,17 @@ const connectDB = async () => {
       maxPoolSize: 5
     });
     console.log(`MongoDB connected ${conn.connection.host}`);
+    try {
+      const { migrateProductCategories } = require('../utils/migrateCategories');
+      const result = await migrateProductCategories();
+      if (result.updated) {
+        console.log(
+          `Migrated ${result.updated} product categor${result.updated === 1 ? 'y' : 'ies'}`
+        );
+      }
+    } catch (migrateErr) {
+      console.log('Category migration skipped:', migrateErr.message);
+    }
     return conn;
   } catch (err) {
     console.log('MongoDB connection failed:', err.message);

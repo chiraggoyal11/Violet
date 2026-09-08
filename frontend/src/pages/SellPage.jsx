@@ -3,8 +3,9 @@ import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import ImageUploadZone from '../components/ImageUploadZone';
+import { PRODUCT_CATEGORIES } from '../data/categories';
 
-const CATEGORIES = ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+const CATEGORIES = PRODUCT_CATEGORIES;
 const COLOURS = [
   'Black',
   'White',

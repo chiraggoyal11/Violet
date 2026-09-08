@@ -187,11 +187,23 @@ describe('Violet API', () => {
     assert.ok(res.body.total >= 1);
     assert.ok(res.body.totalPages >= 1);
     assert.ok(Array.isArray(res.body.colours));
+    assert.ok(Array.isArray(res.body.categories));
+    assert.equal(res.body.categories.length, Product.CATEGORIES.length);
+    assert.ok(res.body.categories.includes('Jewelry'));
+    assert.ok(res.body.categories.includes('Weddings'));
+    assert.ok(res.body.categories.includes('Food & Drink'));
     const withImage = res.body.product.find((p) => p._id === productId);
     assert.ok(withImage);
     assert.ok(withImage.ImageUrls?.length >= 1 || withImage.ImageUrl);
     const url = withImage.ImageUrls?.[0] || withImage.ImageUrl;
     assert.match(url, /^https?:\/\//);
+  });
+
+  it('exposes the full handmade marketplace category list', async () => {
+    const res = await request(app).get('/api/violet/products/meta/categories').expect(200);
+    assert.equal(res.body.success, true);
+    assert.deepEqual(res.body.categories, Product.CATEGORIES);
+    assert.equal(res.body.categories.length, 17);
   });
 
   it('filters by colour and sorts by popular', async () => {
@@ -201,7 +213,7 @@ describe('Violet API', () => {
       .field('Product_Name', 'Blue Scarf')
       .field('Product_Detail', 'Soft indigo weave')
       .field('Price', '22.00')
-      .field('category', 'Fashion')
+      .field('category', 'Clothing')
       .field('colour', 'Blue')
       .expect(200);
 
@@ -417,7 +429,7 @@ describe('Violet API', () => {
       .field('Product_Name', 'Cart Test Mug')
       .field('Product_Detail', 'Stock limited mug')
       .field('Price', '12.00')
-      .field('category', 'Home')
+      .field('category', 'Home & Living')
       .field('stock', '2')
       .expect(200);
 
@@ -509,7 +521,7 @@ describe('Violet API', () => {
       .field('Product_Name', 'COD Bowl')
       .field('Product_Detail', 'Pay later bowl')
       .field('Price', '40.00')
-      .field('category', 'Home')
+      .field('category', 'Home & Living')
       .field('stock', '3')
       .expect(200);
 
