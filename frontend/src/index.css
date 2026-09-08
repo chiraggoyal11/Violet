@@ -3529,3 +3529,136 @@ img {
     max-width: 11rem;
   }
 }
+
+.category-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.category-chip {
+  border: 1px solid rgba(61, 42, 79, 0.16);
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 0.38rem 0.85rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.category-chip:hover {
+  border-color: rgba(61, 42, 79, 0.35);
+  color: var(--brand);
+}
+
+.category-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #f7faf7;
+}
+
+.category-sections {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.category-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.category-section-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--brand);
+}
+
+.category-see-all {
+  border: 0;
+  background: transparent;
+  color: var(--brand-soft);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  padding: 0;
+}
+
+.category-see-all:hover {
+  color: var(--brand);
+}
+
+.pager-numbered {
+  gap: 0.65rem 0.85rem;
+}
+
+.pager-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pager-page-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pager-page {
+  min-width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 0.45rem;
+  border-radius: 10px;
+  border: 1px solid rgba(27, 23, 32, 0.12);
+  background: var(--surface-strong);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pager-page.active,
+.pager-page:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.pager-page.active {
+  background: rgba(61, 42, 79, 0.08);
+}
+
+.pager-ellipsis {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.pager-meta {
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+.home-guest-catalog {
+  padding-top: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .pager-numbered {
+    justify-content: center;
+  }
+
+  .pager-meta {
+    order: 3;
+    flex-basis: 100%;
+  }
+}

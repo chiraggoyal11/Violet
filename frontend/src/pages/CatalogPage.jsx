@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import EmptyState from '../components/EmptyState';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 
 const PAGE_SIZE = 12;
+const ALL_PAGE_SIZE = 24;
 const SORTS = [
   { value: 'newest', label: 'Newest' },
   { value: 'popular', label: 'Popular' },
@@ -20,17 +22,50 @@ const emptyDraft = {
   status: 'active',
 };
 
+function groupByCategory(products, categoryOrder) {
+  const map = new Map();
+  for (const product of products) {
+    const key = product.category || 'Other';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(product);
+  }
+  const ordered = [];
+  for (const cat of categoryOrder) {
+    if (map.has(cat)) {
+      ordered.push({ category: cat, products: map.get(cat) });
+      map.delete(cat);
+    }
+  }
+  for (const [category, list] of map.entries()) {
+    ordered.push({ category, products: list });
+  }
+  return ordered;
+}
+
+function pageWindow(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages = new Set([1, total, current, current - 1, current + 1, current - 2, current + 2]);
+  return [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+}
+
 export default function CatalogPage() {
-  const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState(emptyDraft);
-  const [sort, setSort] = useState('newest');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialCategory = searchParams.get('category') || '';
+  const initialPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+
+  const [query, setQuery] = useState(searchParams.get('q') || '');
+  const [draft, setDraft] = useState({ ...emptyDraft, category: initialCategory });
+  const [sort, setSort] = useState(searchParams.get('sort') || 'newest');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
-    name: '',
+    name: searchParams.get('q') || '',
     ...emptyDraft,
-    sort: 'newest',
+    category: initialCategory,
+    sort: searchParams.get('sort') || 'newest',
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState([]);
@@ -46,19 +81,66 @@ export default function CatalogPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await api.listProducts({
-          ...filters,
-          page,
-          limit: PAGE_SIZE,
-        });
-        if (cancelled) return;
-        startTransition(() => {
-          setProducts(data.product || []);
-          setTotalPages(data.totalPages || 1);
-          setTotal(data.total || 0);
-          if (data.categories) setCategories(data.categories);
-          if (data.colours) setColours(data.colours);
-        });
+        const browsingAll =
+          !filters.category &&
+          !filters.name &&
+          !filters.colour &&
+          filters.minPrice === '' &&
+          filters.maxPrice === '';
+
+        if (browsingAll) {
+          // Load every category so the home/shop All view is truly category-wise.
+          const meta = await api.listProducts({
+            status: filters.status || 'active',
+            sort: filters.sort,
+            page: 1,
+            limit: 1,
+          });
+          const cats = meta.categories?.length
+            ? meta.categories
+            : ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+          const perCategory = Math.max(4, Math.ceil(ALL_PAGE_SIZE / Math.max(cats.length, 1)));
+          const pages = await Promise.all(
+            cats.map((category) =>
+              api.listProducts({
+                ...filters,
+                category,
+                page,
+                limit: perCategory,
+              }),
+            ),
+          );
+          if (cancelled) return;
+          const merged = [];
+          let maxPages = 1;
+          let sumTotal = 0;
+          pages.forEach((data) => {
+            merged.push(...(data.product || []));
+            maxPages = Math.max(maxPages, data.totalPages || 1);
+            sumTotal += Number(data.total) || 0;
+          });
+          startTransition(() => {
+            setProducts(merged);
+            setTotalPages(maxPages);
+            setTotal(sumTotal || meta.total || merged.length);
+            setCategories(cats);
+            if (meta.colours) setColours(meta.colours);
+          });
+        } else {
+          const data = await api.listProducts({
+            ...filters,
+            page,
+            limit: PAGE_SIZE,
+          });
+          if (cancelled) return;
+          startTransition(() => {
+            setProducts(data.product || []);
+            setTotalPages(data.totalPages || 1);
+            setTotal(data.total || 0);
+            if (data.categories) setCategories(data.categories);
+            if (data.colours) setColours(data.colours);
+          });
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message || 'Could not load products');
@@ -73,6 +155,15 @@ export default function CatalogPage() {
     };
   }, [filters, page]);
 
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (filters.name) next.set('q', filters.name);
+    if (filters.category) next.set('category', filters.category);
+    if (filters.sort && filters.sort !== 'newest') next.set('sort', filters.sort);
+    if (page > 1) next.set('page', String(page));
+    setSearchParams(next, { replace: true });
+  }, [filters.name, filters.category, filters.sort, page, setSearchParams]);
+
   const activeFilterCount = useMemo(() => {
     let n = 0;
     if (filters.category) n += 1;
@@ -82,6 +173,13 @@ export default function CatalogPage() {
     if (filters.status && filters.status !== 'active') n += 1;
     return n;
   }, [filters]);
+
+  const grouped = useMemo(
+    () => groupByCategory(products, categories.length ? categories : ['Home', 'Fashion', 'Art', 'Food', 'Other']),
+    [products, categories],
+  );
+
+  const showGrouped = !filters.category && !filters.name && !filters.colour && filters.minPrice === '' && filters.maxPrice === '';
 
   function applySearch(e) {
     e.preventDefault();
@@ -124,6 +222,12 @@ export default function CatalogPage() {
     setFilters((prev) => ({ ...prev, sort: value }));
   }
 
+  function selectCategory(category) {
+    setDraft((d) => ({ ...d, category }));
+    setPage(1);
+    setFilters((prev) => ({ ...prev, category }));
+  }
+
   function openFilters() {
     setDraft({
       category: filters.category || '',
@@ -135,6 +239,13 @@ export default function CatalogPage() {
     setFiltersOpen(true);
   }
 
+  function goToPage(nextPage) {
+    setPage(Math.min(Math.max(1, nextPage), totalPages || 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  const pagerPages = pageWindow(page, totalPages);
+
   return (
     <section className="section home-section">
       <div className="home-sticky-bar">
@@ -142,7 +253,7 @@ export default function CatalogPage() {
           <div>
             <p className="section-kicker">Shop</p>
             <h2>Handmade finds</h2>
-            <p>Search, filter, and sort listings from makers on Violet.</p>
+            <p>Browse every category, then page through more listings.</p>
           </div>
         </div>
 
@@ -189,6 +300,30 @@ export default function CatalogPage() {
           </div>
         </div>
 
+        <div className="category-chip-row" role="tablist" aria-label="Product categories">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!filters.category}
+            className={`category-chip${!filters.category ? ' active' : ''}`}
+            onClick={() => selectCategory('')}
+          >
+            All
+          </button>
+          {(categories.length ? categories : ['Home', 'Fashion', 'Art', 'Food', 'Other']).map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="tab"
+              aria-selected={filters.category === c}
+              className={`category-chip${filters.category === c ? ' active' : ''}`}
+              onClick={() => selectCategory(c)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+
         {activeFilterCount || filters.name ? (
           <div className="active-chips" aria-label="Active filters">
             {filters.name ? (
@@ -205,8 +340,8 @@ export default function CatalogPage() {
               </button>
             ) : null}
             {filters.category ? (
-              <button type="button" className="active-chip" onClick={openFilters}>
-                {filters.category}
+              <button type="button" className="active-chip" onClick={() => selectCategory('')}>
+                {filters.category} ×
               </button>
             ) : null}
             {filters.colour ? (
@@ -341,6 +476,28 @@ export default function CatalogPage() {
           title="No matches"
           body="Try clearing filters or searching a different material, colour, or maker."
         />
+      ) : showGrouped ? (
+        <div className="category-sections">
+          {grouped.map((section) => (
+            <section key={section.category} className="category-section" aria-labelledby={`cat-${section.category}`}>
+              <div className="category-section-head">
+                <h3 id={`cat-${section.category}`}>{section.category}</h3>
+                <button
+                  type="button"
+                  className="category-see-all"
+                  onClick={() => selectCategory(section.category)}
+                >
+                  See all {section.category}
+                </button>
+              </div>
+              <div className="product-grid">
+                {section.products.map((product) => (
+                  <ProductCard key={product._id} product={product} to={`/product/${product._id}`} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       ) : (
         <div className="product-grid">
           {products.map((product) => (
@@ -350,27 +507,46 @@ export default function CatalogPage() {
       )}
 
       {total > 0 && !loading && !isPending ? (
-        <div className="pager">
+        <nav className="pager pager-numbered" aria-label="Product pages">
           <button
             type="button"
             className="btn btn-secondary"
             disabled={page <= 1 || loading}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => goToPage(page - 1)}
           >
             Previous
           </button>
-          <span>
+          <div className="pager-pages">
+            {pagerPages.map((p, index) => {
+              const prev = pagerPages[index - 1];
+              const showEllipsis = prev && p - prev > 1;
+              return (
+                <span key={p} className="pager-page-wrap">
+                  {showEllipsis ? <span className="pager-ellipsis">…</span> : null}
+                  <button
+                    type="button"
+                    className={`pager-page${p === page ? ' active' : ''}`}
+                    aria-current={p === page ? 'page' : undefined}
+                    onClick={() => goToPage(p)}
+                  >
+                    {p}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+          <span className="pager-meta">
             Page {page} of {totalPages} · {total} listings
           </span>
           <button
             type="button"
             className="btn btn-secondary"
             disabled={page >= totalPages || loading}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => goToPage(page + 1)}
           >
             Next
           </button>
-        </div>
+        </nav>
       ) : null}
     </section>
   );
