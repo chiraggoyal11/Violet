@@ -7,6 +7,11 @@ import { formatPrice } from '../components/ProductCard';
 import { isValidPincode } from '../data/geoAddress';
 import { openRazorpayCheckout } from '../utils/razorpayCheckout';
 import { refreshCartBadge } from '../components/BottomNav';
+import {
+  formatCardExpiryInput,
+  formatCardNumberInput,
+  formatCvvInput,
+} from '../utils/cardInput';
 
 const emptyAddress = {
   line1: '',
@@ -985,8 +990,9 @@ export default function CheckoutPage() {
                       id="cardNumber"
                       inputMode="numeric"
                       value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
+                      onChange={(e) => setCardNumber(formatCardNumberInput(e.target.value))}
                       placeholder="4111 1111 1111 1111"
+                      maxLength={19}
                       required
                       autoComplete="cc-number"
                     />
@@ -1005,9 +1011,11 @@ export default function CheckoutPage() {
                     <label htmlFor="cardExpiry">Expiry (MM/YY)</label>
                     <input
                       id="cardExpiry"
+                      inputMode="numeric"
                       value={cardExpiry}
-                      onChange={(e) => setCardExpiry(e.target.value)}
+                      onChange={(e) => setCardExpiry(formatCardExpiryInput(e.target.value))}
                       placeholder="12/28"
+                      maxLength={5}
                       required
                       autoComplete="cc-exp"
                     />
@@ -1018,8 +1026,9 @@ export default function CheckoutPage() {
                       id="cardCvv"
                       inputMode="numeric"
                       value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value)}
+                      onChange={(e) => setCardCvv(formatCvvInput(e.target.value))}
                       placeholder="123"
+                      maxLength={3}
                       required
                       autoComplete="cc-csc"
                     />

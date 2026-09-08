@@ -85,8 +85,8 @@ function validatePaymentInput(method, payment = {}) {
   if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
     return { ok: false, msg: 'Enter expiry as MM/YY' };
   }
-  if (!/^\d{3,4}$/.test(cvv)) {
-    return { ok: false, msg: 'Enter a valid CVV' };
+  if (!/^\d{3}$/.test(cvv)) {
+    return { ok: false, msg: 'Enter a valid 3-digit CVV' };
   }
 
   // Demo decline path for testing failed payments
