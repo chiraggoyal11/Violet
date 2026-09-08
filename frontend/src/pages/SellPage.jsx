@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import ImageUploadZone from '../components/ImageUploadZone';
 
 const CATEGORIES = ['Home', 'Fashion', 'Art', 'Food', 'Other'];
 const COLOURS = [
@@ -140,17 +141,18 @@ export default function SellPage() {
             </div>
           </div>
           <div className="form-field">
-            <label htmlFor="image">Photos (optional, up to 8)</label>
-            <input
+            <span className="field-label" id="image-label">
+              Photos (optional, up to 8)
+            </span>
+            <ImageUploadZone
               id="image"
-              type="file"
-              accept="image/*"
+              label="Upload"
               multiple
-              onChange={(e) => setImageFiles(Array.from(e.target.files || []).slice(0, 8))}
+              maxFiles={8}
+              files={imageFiles}
+              onFiles={setImageFiles}
+              hint="Click or drag and drop"
             />
-            {imageFiles.length ? (
-              <p className="muted-link">{imageFiles.length} photo(s) selected</p>
-            ) : null}
           </div>
           {error ? <p className="status error">{error}</p> : null}
           {ok ? <p className="status ok">{ok}</p> : null}
