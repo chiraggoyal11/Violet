@@ -235,6 +235,20 @@ export const api = {
       body: typeof payload === 'string' ? { note: payload } : payload,
       token,
     }),
+  paymentConfig: (token) => request(ORDER_BASE, '/payments/config', { token }),
+  paymentStatus: (orderId, token) =>
+    request(ORDER_BASE, `/${orderId}/payment-status`, { token }),
+  cancelPayment: (orderId, token) =>
+    request(ORDER_BASE, `/${orderId}/cancel-payment`, {
+      method: 'POST',
+      token,
+    }),
+  confirmPayment: (orderId, payload, token) =>
+    request(ORDER_BASE, `/${orderId}/confirm-payment`, {
+      method: 'POST',
+      body: payload,
+      token,
+    }),
   listOrders: (token) => request(ORDER_BASE, '/', { token }),
   listSales: (token) => request(ORDER_BASE, '/sales', { token }),
 

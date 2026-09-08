@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext';
 import AddressFields from '../components/AddressFields';
 import { formatPrice } from '../components/ProductCard';
 import { isValidPincode } from '../data/geoAddress';
+import { openRazorpayCheckout } from '../utils/razorpayCheckout';
 
 const emptyAddress = {
   line1: '',
@@ -14,6 +15,17 @@ const emptyAddress = {
   country: '',
   pincode: '',
 };
+
+function hasProfileAddress(address) {
+  if (!address) return false;
+  return Boolean(
+    address.line1 &&
+      address.city &&
+      address.state &&
+      address.country &&
+      isValidPincode(address.pincode),
+  );
+}
 
 function hasAnyAddressField(address) {
   if (!address) return false;
@@ -27,17 +39,6 @@ function hasAnyAddressField(address) {
   );
 }
 
-function hasProfileAddress(address) {
-  if (!address) return false;
-  return Boolean(
-    address.line1 &&
-      address.city &&
-      address.state &&
-      address.country &&
-      isValidPincode(address.pincode),
-  );
-}
-
 function formatAddress(address) {
   if (!address) return '';
   return [address.line1, address.line2, address.city, address.state, address.country, address.pincode]
@@ -47,13 +48,14 @@ function formatAddress(address) {
 
 const STEPS = [
   { id: 'address', label: 'Address' },
-  { id: 'review', label: 'Review' },
+  { id: 'review', label: 'Order details' },
   { id: 'payment', label: 'Payment' },
 ];
 
 export default function CheckoutPage() {
-  const { user, token, booting } = useAuth();
+  const { user, token, booting, updateLocalUser } = useAuth();
   const navigate = useNavigate();
+  const addressTouchedRef = useRef(false);
   const [step, setStep] = useState('address');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState('0.00');
@@ -69,7 +71,11 @@ export default function CheckoutPage() {
   const [cardName, setCardName] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
-  const addressTouchedRef = useRef(false);
+  const [payConfig, setPayConfig] = useState(null);
+  const [payPhase, setPayPhase] = useState('form'); // form | processing | awaiting_upi | success | failed
+  const [receipt, setReceipt] = useState(null);
+  const [pendingOrderId, setPendingOrderId] = useState('');
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const profileAddress = user?.address || emptyAddress;
   const profileReady = hasProfileAddress(profileAddress);
@@ -81,11 +87,17 @@ export default function CheckoutPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await api.getCart(token);
+        const [cartData, payment, me] = await Promise.all([
+          api.getCart(token),
+          api.paymentConfig(token).catch(() => null),
+          api.me(token).catch(() => null),
+        ]);
         if (cancelled) return;
-        setItems(data.items || []);
-        setTotal(data.total || '0.00');
-        if (!(data.items || []).length) {
+        if (me?.user) updateLocalUser(me.user);
+        setItems(cartData.items || []);
+        setTotal(cartData.total || '0.00');
+        if (payment?.payment) setPayConfig(payment.payment);
+        if (!(cartData.items || []).length) {
           setError('Your cart is empty.');
         }
       } catch (err) {
@@ -97,6 +109,8 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
+    // updateLocalUser is stable enough for a one-shot refresh; including it retriggers
+    // loading forever when AuthContext recreates the callback after setUser.
   }, [token]);
 
   useEffect(() => {
@@ -133,6 +147,82 @@ export default function CheckoutPage() {
       ),
     [address],
   );
+
+  useEffect(() => {
+    if (payPhase !== 'awaiting_upi' || !pendingOrderId || !token) return undefined;
+
+    let cancelled = false;
+    const tick = window.setInterval(() => {
+      setRemainingSeconds((s) => Math.max(0, s - 1));
+    }, 1000);
+
+    const poll = window.setInterval(async () => {
+      try {
+        const data = await api.paymentStatus(pendingOrderId, token);
+        if (cancelled) return;
+        const status = data.payment?.status || data.order?.paymentStatus;
+        if (typeof data.payment?.remainingSeconds === 'number') {
+          setRemainingSeconds(data.payment.remainingSeconds);
+        }
+        if (status === 'paid') {
+          setReceipt((prev) => ({
+            ...prev,
+            orderId: data.order._id,
+            status: 'paid',
+            method: data.order.paymentMethod,
+            ref: data.payment?.ref || data.order.paymentRef,
+            provider: data.payment?.provider || data.order.paymentProvider,
+            detail: data.payment?.detail || data.order.paymentDetail,
+            amount: data.order.total,
+          }));
+          setPayPhase('success');
+        } else if (status === 'failed') {
+          setPayPhase('failed');
+          setError('Payment was not completed in time. Please try again.');
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(tick);
+      window.clearInterval(poll);
+    };
+  }, [payPhase, pendingOrderId, token]);
+
+  useEffect(() => {
+    if (payPhase !== 'awaiting_upi' || remainingSeconds > 0 || !pendingOrderId || !token) {
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.paymentStatus(pendingOrderId, token);
+        if (cancelled) return;
+        if (data.payment?.status === 'paid') {
+          setReceipt((prev) => ({
+            ...prev,
+            status: 'paid',
+            ref: data.payment?.ref || data.order.paymentRef,
+          }));
+          setPayPhase('success');
+        } else {
+          setPayPhase('failed');
+          setError('Payment timed out after 5 minutes. Order was cancelled.');
+        }
+      } catch {
+        if (!cancelled) {
+          setPayPhase('failed');
+          setError('Payment timed out after 5 minutes. Order was cancelled.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [remainingSeconds, payPhase, pendingOrderId, token]);
 
   if (booting) return <p className="empty">Checking your session…</p>;
   if (!user) return <Navigate to="/login" replace />;
@@ -179,31 +269,290 @@ export default function CheckoutPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
+    setPayPhase('processing');
     try {
+      const paymentPayload =
+        paymentMethod === 'upi'
+          ? { upiId }
+          : paymentMethod === 'card'
+            ? { cardNumber, cardName, cardExpiry, cardCvv }
+            : {};
+
       const data = await api.checkout(
         {
           note,
           shippingAddress: address,
           paymentMethod,
-          payment:
-            paymentMethod === 'upi'
-              ? { upiId }
-              : { cardNumber, cardName, cardExpiry, cardCvv },
+          payment: paymentPayload,
         },
         token,
       );
-      navigate(`/orders?placed=${data.order._id}`, { replace: true });
+
+      if (data.action === 'razorpay' && data.razorpay) {
+        await openRazorpayCheckout({
+          razorpay: data.razorpay,
+          order: data.order,
+          user,
+          onSuccess: async (response) => {
+            const confirmed = await api.confirmPayment(
+              data.order._id,
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              token,
+            );
+            setReceipt({
+              orderId: confirmed.order._id,
+              status: confirmed.payment?.status || 'paid',
+              method: confirmed.order.paymentMethod,
+              ref: confirmed.payment?.ref || confirmed.order.paymentRef,
+              provider: 'razorpay',
+              amount: confirmed.order.total,
+            });
+            setPayPhase('success');
+            setItems([]);
+          },
+          onDismiss: () => {
+            setPayPhase('form');
+            setError('Payment was cancelled. Your order is pending — try again from Orders or checkout again.');
+          },
+        });
+        return;
+      }
+
+      if (data.action === 'awaiting_upi') {
+        setPendingOrderId(data.order._id);
+        setRemainingSeconds(
+          Number(data.payment?.remainingSeconds) ||
+            Number(payConfig?.upiTimeoutSeconds) ||
+            300,
+        );
+        setReceipt({
+          orderId: data.order._id,
+          status: 'pending',
+          method: 'upi',
+          ref: data.payment?.ref || data.order.paymentRef,
+          provider: data.payment?.provider || data.order.paymentProvider,
+          detail: data.payment?.detail || data.order.paymentDetail,
+          amount: data.order.total,
+          expiresAt: data.payment?.expiresAt,
+        });
+        setPayPhase('awaiting_upi');
+        setItems([]);
+        return;
+      }
+
+      setReceipt({
+        orderId: data.order._id,
+        status: data.payment?.status || data.order.paymentStatus,
+        method: data.payment?.method || data.order.paymentMethod,
+        ref: data.payment?.ref || data.order.paymentRef,
+        provider: data.payment?.provider || data.order.paymentProvider,
+        detail: data.payment?.detail || data.order.paymentDetail,
+        amount: data.payment?.amount || data.order.total,
+      });
+      setPayPhase('success');
+      setItems([]);
     } catch (err) {
+      setPayPhase('form');
       setError(err.message || 'Payment failed');
     } finally {
       setBusy(false);
     }
   }
 
+  async function cancelUpiPayment() {
+    if (!pendingOrderId) return;
+    setBusy(true);
+    try {
+      await api.cancelPayment(pendingOrderId, token);
+      setPayPhase('failed');
+      setError('Payment cancelled. You can try again from cart.');
+    } catch (err) {
+      setError(err.message || 'Could not cancel payment');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function formatTimer(totalSec) {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function goToOrders() {
+    if (receipt?.orderId && payPhase === 'success') {
+      navigate(`/orders?placed=${receipt.orderId}`, { replace: true });
+    } else {
+      navigate('/orders', { replace: true });
+    }
+  }
+
+  function retryPayment() {
+    setError('');
+    setPayPhase('form');
+    setPendingOrderId('');
+    setReceipt(null);
+    setRemainingSeconds(0);
+    navigate('/cart', { replace: true });
+  }
+
   if (loading) {
     return (
       <section className="section">
         <p className="empty">Loading checkout…</p>
+      </section>
+    );
+  }
+
+  if (payPhase === 'success' && receipt) {
+    return (
+      <section className="section checkout-section">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Checkout</p>
+            <h2>Complete your order</h2>
+          </div>
+        </div>
+        <div className="panel wide checkout-panel">
+          <div className="payment-success">
+            <p className="section-kicker">Payment</p>
+            <h3>
+              {receipt.status === 'pending' && receipt.method === 'cod'
+                ? 'Order placed'
+                : 'Order placed'}
+            </h3>
+            <p className="lede">
+              {receipt.status === 'pending' && receipt.method === 'cod'
+                ? 'Pay the seller when your order arrives.'
+                : 'Payment succeeded and your order is confirmed.'}
+            </p>
+            <dl className="payment-receipt">
+              <div>
+                <dt>Amount</dt>
+                <dd>{formatPrice(receipt.amount)}</dd>
+              </div>
+              <div>
+                <dt>Method</dt>
+                <dd>{String(receipt.method || '').toUpperCase()}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{receipt.status}</dd>
+              </div>
+              {receipt.detail ? (
+                <div>
+                  <dt>Detail</dt>
+                  <dd>{receipt.detail}</dd>
+                </div>
+              ) : null}
+              {receipt.ref ? (
+                <div>
+                  <dt>Reference</dt>
+                  <dd className="payment-ref">{receipt.ref}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Provider</dt>
+                <dd>{receipt.provider}</dd>
+              </div>
+            </dl>
+            <div className="form-actions">
+              <button type="button" className="btn btn-accent" onClick={goToOrders}>
+                View order
+              </button>
+              <Link className="btn btn-secondary" to="/catalog">
+                Keep shopping
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (payPhase === 'awaiting_upi') {
+    const urgent = remainingSeconds <= 60;
+    return (
+      <section className="section checkout-section">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Checkout</p>
+            <h2>Complete your order</h2>
+          </div>
+        </div>
+        <div className="panel wide checkout-panel">
+          <div className="payment-awaiting-upi">
+            <div className="payment-spinner" aria-hidden="true" />
+            <h3>Waiting for UPI payment</h3>
+            <p className="lede">
+              Open your UPI app and approve the payment request for{' '}
+              <strong>{formatPrice(receipt?.amount || total)}</strong>
+              {receipt?.detail ? (
+                <>
+                  {' '}
+                  from <strong>{receipt.detail}</strong>
+                </>
+              ) : null}
+              . If you do not complete it in time, the payment will fail and the
+              order will be cancelled.
+            </p>
+            <div
+              className={`payment-timer${urgent ? ' urgent' : ''}`}
+              role="timer"
+              aria-live="polite"
+              aria-label={`${remainingSeconds} seconds remaining`}
+            >
+              <span className="payment-timer-label">Time left</span>
+              <strong className="payment-timer-value">{formatTimer(remainingSeconds)}</strong>
+              <span className="payment-timer-hint">Expires in 5 minutes</span>
+            </div>
+            {error ? <p className="status error">{error}</p> : null}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={cancelUpiPayment}
+                disabled={busy}
+              >
+                Cancel payment
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (payPhase === 'failed') {
+    return (
+      <section className="section checkout-section">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Checkout</p>
+            <h2>Complete your order</h2>
+          </div>
+        </div>
+        <div className="panel wide checkout-panel">
+          <div className="payment-failed">
+            <h3>Order failed</h3>
+            <p className="lede">
+              {error ||
+                'The UPI payment was not completed within 5 minutes. Your order was cancelled.'}
+            </p>
+            <div className="form-actions">
+              <button type="button" className="btn btn-accent" onClick={retryPayment}>
+                Back to cart
+              </button>
+              <Link className="btn btn-secondary" to="/catalog">
+                Keep shopping
+              </Link>
+            </div>
+          </div>
+        </div>
       </section>
     );
   }
@@ -232,7 +581,7 @@ export default function CheckoutPage() {
         <div>
           <p className="section-kicker">Checkout</p>
           <h2>Complete your order</h2>
-          <p>Confirm shipping, review details, then pay with Card or UPI.</p>
+          <p>Confirm address, review order details, then pay.</p>
         </div>
         <Link className="btn btn-secondary" to="/cart">
           Back to cart
@@ -260,31 +609,58 @@ export default function CheckoutPage() {
 
       {step === 'address' ? (
         <form className="panel wide checkout-panel" onSubmit={continueFromAddress}>
-          <h3>Ship to</h3>
-          <p className="lede">
-            {profileReady
-              ? 'Your profile address is shown as the default. Editing here only applies to this order — it will not update your profile.'
-              : 'Add a shipping address for this order. It will not be saved to your profile.'}
-          </p>
-
+          <h3>Shipping address</h3>
           {!editingAddress && addressComplete ? (
-            <div className="checkout-address-card">
-              <p>{formatAddress(address)}</p>
-              <div className="form-actions">
+            <>
+              <p className="lede">
+                Using your saved profile address. Edits here apply to this order only.
+              </p>
+              <div className="checkout-address-selected">
+                <div className="checkout-address-selected-main">
+                  <span className="checkout-address-selected-badge" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div>
+                    <p className="checkout-address-selected-label">Selected address</p>
+                    <p className="checkout-address-selected-text">{formatAddress(address)}</p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="checkout-address-edit"
                   onClick={startEditingAddress}
+                  aria-label="Edit address"
+                  title="Edit address"
                 >
-                  Edit address
-                </button>
-                <button className="btn btn-accent" type="submit">
-                  Use this address
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M13.5 6.5l3 3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               </div>
-            </div>
+              <div className="form-actions">
+                <button className="btn btn-accent" type="submit">
+                  Continue to order details
+                </button>
+              </div>
+            </>
           ) : (
             <>
+              <p className="lede">
+                {profileReady
+                  ? 'Update the shipping address for this order. It will not change your profile.'
+                  : 'Add a shipping address to continue. It will not be saved to your profile unless you update Profile.'}
+              </p>
               <AddressFields
                 address={address}
                 onChange={patchAddress}
@@ -301,8 +677,17 @@ export default function CheckoutPage() {
                     Use profile address
                   </button>
                 ) : null}
+                {addressComplete && editingAddress ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setEditingAddress(false)}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
                 <button className="btn btn-accent" type="submit">
-                  Continue to review
+                  Continue to order details
                 </button>
               </div>
             </>
@@ -312,7 +697,7 @@ export default function CheckoutPage() {
 
       {step === 'review' ? (
         <form className="panel wide checkout-panel" onSubmit={continueFromReview}>
-          <h3>Order review</h3>
+          <h3>Order details</h3>
           <p className="lede">Check products, total, and shipping before payment.</p>
 
           <div className="checkout-review-block">
@@ -381,115 +766,152 @@ export default function CheckoutPage() {
       ) : null}
 
       {step === 'payment' ? (
-        <form className="panel wide checkout-panel" onSubmit={payAndPlaceOrder}>
-          <h3>Payment</h3>
-          <p className="lede">
-            Pay with Card or UPI. Demo checkout confirms instantly — no real charge
-            until a live gateway key is connected.
-          </p>
-
-          <div className="payment-method-tabs" role="tablist" aria-label="Payment method">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={paymentMethod === 'upi'}
-              className={paymentMethod === 'upi' ? 'active' : ''}
-              onClick={() => setPaymentMethod('upi')}
-            >
-              UPI
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={paymentMethod === 'card'}
-              className={paymentMethod === 'card' ? 'active' : ''}
-              onClick={() => setPaymentMethod('card')}
-            >
-              Card
-            </button>
-          </div>
-
-          {paymentMethod === 'upi' ? (
-            <div className="form-field">
-              <label htmlFor="upiId">UPI ID</label>
-              <input
-                id="upiId"
-                value={upiId}
-                onChange={(e) => setUpiId(e.target.value)}
-                placeholder="name@upi"
-                required
-                autoComplete="off"
-              />
+        <div className="panel wide checkout-panel">
+          {payPhase === 'processing' ? (
+            <div className="payment-processing" role="status" aria-live="polite">
+              <div className="payment-spinner" aria-hidden="true" />
+              <h3>Processing payment</h3>
+              <p className="lede">
+                Securely confirming your {paymentMethod.toUpperCase()} payment…
+              </p>
             </div>
-          ) : (
-            <div className="form-grid">
-              <div className="form-field form-field-full">
-                <label htmlFor="cardNumber">Card number</label>
-                <input
-                  id="cardNumber"
-                  inputMode="numeric"
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value)}
-                  placeholder="4111 1111 1111 1111"
-                  required
-                  autoComplete="cc-number"
-                />
-              </div>
-              <div className="form-field form-field-full">
-                <label htmlFor="cardName">Name on card</label>
-                <input
-                  id="cardName"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  required
-                  autoComplete="cc-name"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="cardExpiry">Expiry (MM/YY)</label>
-                <input
-                  id="cardExpiry"
-                  value={cardExpiry}
-                  onChange={(e) => setCardExpiry(e.target.value)}
-                  placeholder="12/28"
-                  required
-                  autoComplete="cc-exp"
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="cardCvv">CVV</label>
-                <input
-                  id="cardCvv"
-                  inputMode="numeric"
-                  value={cardCvv}
-                  onChange={(e) => setCardCvv(e.target.value)}
-                  placeholder="123"
-                  required
-                  autoComplete="cc-csc"
-                />
-              </div>
-            </div>
-          )}
+          ) : null}
 
-          <div className="checkout-pay-summary">
-            <span>Amount due</span>
-            <strong>{formatPrice(total)}</strong>
-          </div>
+          {payPhase === 'form' ? (
+            <form onSubmit={payAndPlaceOrder}>
+              <h3>Payment</h3>
+              <p className="lede">
+                {payConfig?.demo !== false
+                  ? 'Pay with UPI, Card, or Cash on delivery. UPI asks you to approve in your app within 5 minutes — otherwise payment fails.'
+                  : 'Pay securely with Razorpay Checkout, or choose Cash on delivery.'}
+              </p>
 
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setStep('review')}
-              disabled={busy}
-            >
-              Back
-            </button>
-            <button className="btn btn-accent" type="submit" disabled={busy}>
-              {busy ? 'Paying…' : `Pay ${formatPrice(total)} & place order`}
-            </button>
-          </div>
-        </form>
+              <div className="payment-method-tabs payment-method-tabs-3" role="tablist" aria-label="Payment method">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={paymentMethod === 'upi'}
+                  className={paymentMethod === 'upi' ? 'active' : ''}
+                  onClick={() => setPaymentMethod('upi')}
+                >
+                  UPI
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={paymentMethod === 'card'}
+                  className={paymentMethod === 'card' ? 'active' : ''}
+                  onClick={() => setPaymentMethod('card')}
+                >
+                  Card
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={paymentMethod === 'cod'}
+                  className={paymentMethod === 'cod' ? 'active' : ''}
+                  onClick={() => setPaymentMethod('cod')}
+                >
+                  COD
+                </button>
+              </div>
+
+              {paymentMethod === 'upi' ? (
+                <div className="form-field">
+                  <label htmlFor="upiId">UPI ID</label>
+                  <input
+                    id="upiId"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    placeholder="name@upi"
+                    required
+                    autoComplete="off"
+                  />
+                </div>
+              ) : null}
+
+              {paymentMethod === 'card' ? (
+                <div className="form-grid">
+                  <div className="form-field form-field-full">
+                    <label htmlFor="cardNumber">Card number</label>
+                    <input
+                      id="cardNumber"
+                      inputMode="numeric"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(e.target.value)}
+                      placeholder="4111 1111 1111 1111"
+                      required
+                      autoComplete="cc-number"
+                    />
+                  </div>
+                  <div className="form-field form-field-full">
+                    <label htmlFor="cardName">Name on card</label>
+                    <input
+                      id="cardName"
+                      value={cardName}
+                      onChange={(e) => setCardName(e.target.value)}
+                      required
+                      autoComplete="cc-name"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="cardExpiry">Expiry (MM/YY)</label>
+                    <input
+                      id="cardExpiry"
+                      value={cardExpiry}
+                      onChange={(e) => setCardExpiry(e.target.value)}
+                      placeholder="12/28"
+                      required
+                      autoComplete="cc-exp"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="cardCvv">CVV</label>
+                    <input
+                      id="cardCvv"
+                      inputMode="numeric"
+                      value={cardCvv}
+                      onChange={(e) => setCardCvv(e.target.value)}
+                      placeholder="123"
+                      required
+                      autoComplete="cc-csc"
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {paymentMethod === 'cod' ? (
+                <div className="payment-cod-note">
+                  <p>
+                    Pay <strong>{formatPrice(total)}</strong> in cash when your order is
+                    delivered. No online charge now.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="checkout-pay-summary">
+                <span>Amount due</span>
+                <strong>{formatPrice(total)}</strong>
+              </div>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setStep('review')}
+                  disabled={busy}
+                >
+                  Back
+                </button>
+                <button className="btn btn-accent" type="submit" disabled={busy}>
+                  {paymentMethod === 'cod'
+                    ? `Place order · ${formatPrice(total)}`
+                    : `Pay ${formatPrice(total)}`}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

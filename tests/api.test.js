@@ -5,6 +5,9 @@ const request = require('supertest');
 
 process.env.jwtSecret = process.env.jwtSecret || 'test_jwt_secret';
 process.env.RESET_DEV_MODE = 'true';
+process.env.PAYMENT_MODE = 'demo';
+delete process.env.RAZORPAY_KEY_ID;
+delete process.env.RAZORPAY_KEY_SECRET;
 process.env.MONGO =
   process.env.MONGO_TEST || 'mongodb://127.0.0.1:27017/violet_test';
 process.env.BUCKET_NAME = 'violet-products';
@@ -460,9 +463,23 @@ describe('Violet API', () => {
       .expect(200);
 
     assert.ok(checkout.body.order._id);
+    assert.equal(checkout.body.action, 'awaiting_upi');
     assert.equal(checkout.body.order.paymentMethod, 'upi');
-    assert.equal(checkout.body.order.paymentStatus, 'paid');
+    assert.equal(checkout.body.order.paymentStatus, 'pending');
+    assert.equal(checkout.body.order.paymentProvider, 'demo');
+    assert.ok(checkout.body.payment?.expiresAt);
+    assert.ok(checkout.body.payment?.remainingSeconds > 0);
     assert.equal(checkout.body.order.shippingAddress.city, 'Pune');
+
+    // Speed up demo UPI auto-confirm for this assertion
+    process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS = '1';
+    await new Promise((r) => setTimeout(r, 1200));
+    const paid = await request(app)
+      .get(`/api/violet/orders/${checkout.body.order._id}/payment-status`)
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(paid.body.order.paymentStatus, 'paid');
+    delete process.env.PAYMENT_DEMO_UPI_AUTO_CONFIRM_SECONDS;
 
     const review = await request(app)
       .post(`/api/violet/reviews/product/${cartProductId}`)
@@ -476,6 +493,75 @@ describe('Violet API', () => {
       .set('Authorization', `Bearer ${token2}`)
       .expect(200);
     assert.ok(orders.body.orders.length >= 1);
+  });
+
+  it('exposes payment config and supports COD checkout', async () => {
+    const cfg = await request(app)
+      .get('/api/violet/orders/payments/config')
+      .set('Authorization', `Bearer ${token2}`)
+      .expect(200);
+    assert.equal(cfg.body.payment.mode, 'demo');
+    assert.ok(cfg.body.payment.methods.includes('cod'));
+
+    const listing = await request(app)
+      .post('/api/violet/products')
+      .set('Authorization', `Bearer ${token}`)
+      .field('Product_Name', 'COD Bowl')
+      .field('Product_Detail', 'Pay later bowl')
+      .field('Price', '40.00')
+      .field('category', 'Home')
+      .field('stock', '3')
+      .expect(200);
+
+    const pid = listing.body.product._id;
+    await request(app)
+      .post('/api/violet/cart/items')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ product_id: pid, quantity: 1 })
+      .expect(200);
+
+    const declined = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '1 Road',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'card',
+        payment: {
+          cardNumber: '4111111111110000',
+          cardName: 'Test',
+          cardExpiry: '12/28',
+          cardCvv: '123'
+        }
+      })
+      .expect(400);
+    assert.match(String(declined.body.msg || ''), /declined/i);
+
+    const cod = await request(app)
+      .post('/api/violet/orders/checkout')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({
+        shippingAddress: {
+          line1: '1 Road',
+          city: 'Pune',
+          state: 'MH',
+          country: 'India',
+          pincode: '411001'
+        },
+        paymentMethod: 'cod',
+        payment: {}
+      })
+      .expect(200);
+
+    assert.equal(cod.body.order.paymentMethod, 'cod');
+    assert.equal(cod.body.order.paymentStatus, 'pending');
+    assert.equal(cod.body.order.paymentProvider, 'cod');
+    assert.ok(cod.body.payment?.ref);
   });
 
   it('updates and deletes owned products (including S3 object)', async () => {

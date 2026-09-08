@@ -42,7 +42,10 @@ const authLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, msg: 'Too many requests, try again later' }
+  message: { success: false, msg: 'Too many requests, try again later' },
+  // Session refresh (GET /) and public config must not share the login/register budget —
+  // otherwise normal browsing clears auth and breaks checkout.
+  skip: (req) => req.method === 'GET',
 });
 
 connectDB().catch((err) => {
