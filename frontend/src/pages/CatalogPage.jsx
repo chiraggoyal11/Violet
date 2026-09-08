@@ -81,19 +81,66 @@ export default function CatalogPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await api.listProducts({
-          ...filters,
-          page,
-          limit: PAGE_SIZE,
-        });
-        if (cancelled) return;
-        startTransition(() => {
-          setProducts(data.product || []);
-          setTotalPages(data.totalPages || 1);
-          setTotal(data.total || 0);
-          if (data.categories) setCategories(data.categories);
-          if (data.colours) setColours(data.colours);
-        });
+        const browsingAll =
+          !filters.category &&
+          !filters.name &&
+          !filters.colour &&
+          filters.minPrice === '' &&
+          filters.maxPrice === '';
+
+        if (browsingAll) {
+          // Load every category so the home/shop All view is truly category-wise.
+          const meta = await api.listProducts({
+            status: filters.status || 'active',
+            sort: filters.sort,
+            page: 1,
+            limit: 1,
+          });
+          const cats = meta.categories?.length
+            ? meta.categories
+            : ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+          const perCategory = Math.max(4, Math.ceil(ALL_PAGE_SIZE / Math.max(cats.length, 1)));
+          const pages = await Promise.all(
+            cats.map((category) =>
+              api.listProducts({
+                ...filters,
+                category,
+                page,
+                limit: perCategory,
+              }),
+            ),
+          );
+          if (cancelled) return;
+          const merged = [];
+          let maxPages = 1;
+          let sumTotal = 0;
+          pages.forEach((data) => {
+            merged.push(...(data.product || []));
+            maxPages = Math.max(maxPages, data.totalPages || 1);
+            sumTotal += Number(data.total) || 0;
+          });
+          startTransition(() => {
+            setProducts(merged);
+            setTotalPages(maxPages);
+            setTotal(sumTotal || meta.total || merged.length);
+            setCategories(cats);
+            if (meta.colours) setColours(meta.colours);
+          });
+        } else {
+          const data = await api.listProducts({
+            ...filters,
+            page,
+            limit: PAGE_SIZE,
+          });
+          if (cancelled) return;
+          startTransition(() => {
+            setProducts(data.product || []);
+            setTotalPages(data.totalPages || 1);
+            setTotal(data.total || 0);
+            if (data.categories) setCategories(data.categories);
+            if (data.colours) setColours(data.colours);
+          });
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message || 'Could not load products');

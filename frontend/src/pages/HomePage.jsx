@@ -43,17 +43,39 @@ export default function HomePage() {
       setLoading(true);
       setError('');
       try {
-        const data = await api.listProducts({
+        const meta = await api.listProducts({
           status: 'active',
           sort: 'newest',
-          page,
-          limit: PREVIEW_LIMIT,
+          page: 1,
+          limit: 1,
         });
+        const cats = meta.categories?.length
+          ? meta.categories
+          : ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+        const pages = await Promise.all(
+          cats.map((category) =>
+            api.listProducts({
+              status: 'active',
+              sort: 'newest',
+              category,
+              page,
+              limit: PREVIEW_LIMIT,
+            }),
+          ),
+        );
         if (cancelled) return;
-        setProducts(data.product || []);
-        setTotalPages(data.totalPages || 1);
-        setTotal(data.total || 0);
-        if (data.categories?.length) setCategories(data.categories);
+        const merged = [];
+        let maxPages = 1;
+        let sumTotal = 0;
+        pages.forEach((data) => {
+          merged.push(...(data.product || []));
+          maxPages = Math.max(maxPages, data.totalPages || 1);
+          sumTotal += Number(data.total) || 0;
+        });
+        setProducts(merged);
+        setTotalPages(maxPages);
+        setTotal(sumTotal || meta.total || merged.length);
+        setCategories(cats);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not load products');
       } finally {
