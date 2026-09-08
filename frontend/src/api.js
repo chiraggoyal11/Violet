@@ -249,6 +249,7 @@ export const api = {
       token,
     }),
   paymentConfig: (token) => request(ORDER_BASE, '/payments/config', { token }),
+  pendingPayment: (token) => request(ORDER_BASE, '/pending-payment', { token }),
   paymentStatus: (orderId, token) =>
     request(ORDER_BASE, `/${orderId}/payment-status`, { token }),
   cancelPayment: (orderId, token) =>

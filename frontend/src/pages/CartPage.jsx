@@ -113,6 +113,7 @@ export default function CartPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState(null);
 
   function applyCart(data) {
     setItems(data.items || []);
@@ -125,8 +126,12 @@ export default function CartPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getCart(token);
+      const [data, pending] = await Promise.all([
+        api.getCart(token),
+        api.pendingPayment(token).catch(() => null),
+      ]);
       applyCart(data);
+      setPendingPayment(pending?.pending || null);
     } catch (err) {
       setError(err.message || 'Could not load cart');
     } finally {
@@ -222,6 +227,26 @@ export default function CartPage() {
         </Link>
       </div>
       {error ? <p className="status error">{error}</p> : null}
+      {pendingPayment ? (
+        <div className="payment-pending-banner" role="status">
+          <div>
+            <strong>Payment in progress</strong>
+            <p>
+              Order #{String(pendingPayment._id).slice(-6)} is waiting for UPI approval.
+              Finish it before placing another order, or cancel from Orders. Auto-cancels
+              after 2 minutes.
+            </p>
+          </div>
+          <div className="form-actions">
+            <Link className="btn btn-accent" to={`/checkout?resume=${pendingPayment._id}`}>
+              Continue payment
+            </Link>
+            <Link className="btn btn-secondary" to="/orders">
+              Open Orders
+            </Link>
+          </div>
+        </div>
+      ) : null}
       {loading ? <p className="empty">Loading cart…</p> : null}
       {emptyAll ? (
         <EmptyState

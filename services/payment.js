@@ -9,8 +9,8 @@ const crypto = require('crypto');
 const METHODS = new Set(['card', 'upi', 'cod']);
 
 /** UPI collect request must be approved within this window. */
-const UPI_TIMEOUT_SECONDS = 5 * 60;
-/** Demo only: simulate phone approval after this delay (still shows 5‑min timer). */
+const UPI_TIMEOUT_SECONDS = 2 * 60;
+/** Demo only: simulate phone approval after this delay (still shows the 2‑min timer). */
 const DEMO_UPI_AUTO_CONFIRM_SECONDS = 12;
 
 function demoUpiAutoConfirmSeconds() {
