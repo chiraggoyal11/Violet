@@ -81,7 +81,6 @@ export default function CatalogPage() {
   const [page, setPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
   const [colours, setColours] = useState([]);
   const [products, setProducts] = useState([]);
   const [error, setError] = useState('');
@@ -135,7 +134,6 @@ export default function CatalogPage() {
             setProducts(merged);
             setTotalPages(maxPages);
             setTotal(sumTotal || meta.total || merged.length);
-            setCategories(PRODUCT_CATEGORIES);
             if (meta.colours) setColours(meta.colours);
           });
         } else {
@@ -149,7 +147,6 @@ export default function CatalogPage() {
             setProducts(data.product || []);
             setTotalPages(data.totalPages || 1);
             setTotal(data.total || 0);
-            setCategories(PRODUCT_CATEGORIES);
             if (data.colours) setColours(data.colours);
           });
         }
@@ -205,8 +202,8 @@ export default function CatalogPage() {
   }, [filters]);
 
   const grouped = useMemo(
-    () => groupByCategory(products, categories.length ? categories : ['Home', 'Fashion', 'Art', 'Food', 'Other']),
-    [products, categories],
+    () => groupByCategory(products, PRODUCT_CATEGORIES),
+    [products],
   );
 
   const showGrouped = !filters.category && !filters.name && !filters.colour && filters.minPrice === '' && filters.maxPrice === '';
