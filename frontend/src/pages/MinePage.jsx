@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import ProductCard from '../components/ProductCard';
+import { PRODUCT_CATEGORIES } from '../data/categories';
 
 export default function MinePage() {
   const { user, token, booting } = useAuth();
@@ -180,7 +181,7 @@ export default function MinePage() {
                       setDraft((d) => ({ ...d, category: e.target.value }))
                     }
                   >
-                    {['Home', 'Fashion', 'Art', 'Food', 'Other'].map((c) => (
+                    {PRODUCT_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>

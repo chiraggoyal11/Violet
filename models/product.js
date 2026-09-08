@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
+const { PRODUCT_CATEGORIES } = require('../data/categories');
 
-const CATEGORIES = ['Home', 'Fashion', 'Art', 'Food', 'Other'];
+const CATEGORIES = PRODUCT_CATEGORIES;
 const COLOURS = [
   'Black',
   'White',
