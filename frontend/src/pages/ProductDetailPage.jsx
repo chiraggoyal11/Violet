@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import { refreshCartBadge } from '../components/BottomNav';
 import { formatPrice } from '../components/ProductCard';
 
 const QUICK_PROMPTS = [
@@ -169,6 +170,7 @@ export default function ProductDetailPage() {
     try {
       await api.addToCart(id, token, 1);
       setOk('Added to cart.');
+      refreshCartBadge();
     } catch (err) {
       setError(err.message || 'Could not add to cart');
     } finally {

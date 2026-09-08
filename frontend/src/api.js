@@ -214,6 +214,7 @@ export const api = {
     request(FAV_BASE, `/${productId}`, { method: 'DELETE', token }),
 
   getCart: (token) => request(CART_BASE, '/', { token }),
+  cartCount: (token) => request(CART_BASE, '/count', { token }),
   addToCart: (product_id, token, quantity = 1) =>
     request(CART_BASE, '/items', {
       method: 'POST',
@@ -228,6 +229,18 @@ export const api = {
     }),
   removeCartItem: (productId, token) =>
     request(CART_BASE, `/items/${productId}`, { method: 'DELETE', token }),
+  saveCartItemForLater: (productId, token) =>
+    request(CART_BASE, `/items/${productId}/save-for-later`, {
+      method: 'POST',
+      token,
+    }),
+  moveSavedToCart: (productId, token) =>
+    request(CART_BASE, `/saved/${productId}/move-to-cart`, {
+      method: 'POST',
+      token,
+    }),
+  removeSavedItem: (productId, token) =>
+    request(CART_BASE, `/saved/${productId}`, { method: 'DELETE', token }),
 
   checkout: (payload, token) =>
     request(ORDER_BASE, '/checkout', {

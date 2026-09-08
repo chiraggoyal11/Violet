@@ -121,6 +121,14 @@ async function restoreStock(orderItems) {
   }
 }
 
+/** Clear active cart items after a successful payment (saved-for-later stays). */
+async function clearBuyerCartItems(userId) {
+  const cart = await Cart.findOne({ user_id: userId });
+  if (!cart) return;
+  cart.items = [];
+  await cart.save();
+}
+
 async function failPendingPaymentOrder(order) {
   if (order.paymentStatus !== 'pending') {
     return order;
@@ -168,6 +176,7 @@ async function resolveUpiPayment(order) {
         order.paymentRef = `upi_paid_${Date.now().toString(36)}`;
       }
       await order.save();
+      await clearBuyerCartItems(order.buyer_id);
       await notifySellers(order.items, order.buyer_id);
     }
   }
@@ -250,6 +259,20 @@ router.post('/checkout', user_jwt, async (req, res) => {
       return res.status(400).json({ success: false, msg: 'Cart is empty' });
     }
 
+    // Avoid double-reserving stock while a UPI/Razorpay collect is still open.
+    const pendingPay = await Order.findOne({
+      buyer_id: req.user.id,
+      paymentStatus: 'pending',
+      paymentMethod: { $in: ['upi', 'card'] },
+    }).sort({ _id: -1 });
+    if (pendingPay) {
+      return res.status(400).json({
+        success: false,
+        msg: 'You already have a payment in progress. Finish or cancel it before placing another order.',
+        orderId: pendingPay._id,
+      });
+    }
+
     const reserved = await reserveCartItems(cart, req.user.id);
     if (!reserved.ok) {
       return res.status(reserved.status).json({ success: false, msg: reserved.msg });
@@ -293,9 +316,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
       });
 
-      cart.items = [];
-      await cart.save();
-
+      // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
       return res.status(200).json({
         success: true,
         msg: 'Payment required',
@@ -327,9 +348,7 @@ router.post('/checkout', user_jwt, async (req, res) => {
         paymentExpiresAt: payResult.expiresAt,
       });
 
-      cart.items = [];
-      await cart.save();
-
+      // Keep cart items until payment succeeds; fail/cancel leaves them for retry.
       return res.status(200).json({
         success: true,
         msg: 'Approve the UPI payment request within 5 minutes',
@@ -449,8 +468,7 @@ router.post('/:id/confirm-payment', user_jwt, async (req, res) => {
       return res.status(400).json({ success: false, msg: 'Payment order mismatch' });
     }
     if (!verifyRazorpaySignature({ orderId, paymentId, signature })) {
-      order.paymentStatus = 'failed';
-      await order.save();
+      await failPendingPaymentOrder(order);
       return res.status(400).json({ success: false, msg: 'Payment verification failed' });
     }
 
@@ -459,6 +477,7 @@ router.post('/:id/confirm-payment', user_jwt, async (req, res) => {
     order.paymentProvider = 'razorpay';
     order.paidAt = new Date();
     await order.save();
+    await clearBuyerCartItems(order.buyer_id);
     await notifySellers(order.items, req.user.id);
 
     return res.status(200).json({

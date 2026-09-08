@@ -6,6 +6,7 @@ import AddressFields from '../components/AddressFields';
 import { formatPrice } from '../components/ProductCard';
 import { isValidPincode } from '../data/geoAddress';
 import { openRazorpayCheckout } from '../utils/razorpayCheckout';
+import { refreshCartBadge } from '../components/BottomNav';
 
 const emptyAddress = {
   line1: '',
@@ -175,10 +176,13 @@ export default function CheckoutPage() {
             detail: data.payment?.detail || data.order.paymentDetail,
             amount: data.order.total,
           }));
+          setItems([]);
           setPayPhase('success');
+          refreshCartBadge();
         } else if (status === 'failed') {
           setPayPhase('failed');
-          setError('Payment was not completed in time. Please try again.');
+          setError('Payment was not completed in time. Your items are still in the cart.');
+          refreshCartBadge();
         }
       } catch {
         /* keep polling */
@@ -207,15 +211,19 @@ export default function CheckoutPage() {
             status: 'paid',
             ref: data.payment?.ref || data.order.paymentRef,
           }));
+          setItems([]);
           setPayPhase('success');
+          refreshCartBadge();
         } else {
           setPayPhase('failed');
-          setError('Payment timed out after 5 minutes. Order was cancelled.');
+          setError('Payment timed out after 5 minutes. Your items are still in the cart.');
+          refreshCartBadge();
         }
       } catch {
         if (!cancelled) {
           setPayPhase('failed');
-          setError('Payment timed out after 5 minutes. Order was cancelled.');
+          setError('Payment timed out after 5 minutes. Your items are still in the cart.');
+          refreshCartBadge();
         }
       }
     })();
@@ -313,10 +321,14 @@ export default function CheckoutPage() {
             });
             setPayPhase('success');
             setItems([]);
+            refreshCartBadge();
           },
           onDismiss: () => {
             setPayPhase('form');
-            setError('Payment was cancelled. Your order is pending — try again from Orders or checkout again.');
+            setError(
+              'Payment was cancelled. Your cart items are still there — try again when ready.',
+            );
+            refreshCartBadge();
           },
         });
         return;
@@ -340,7 +352,8 @@ export default function CheckoutPage() {
           expiresAt: data.payment?.expiresAt,
         });
         setPayPhase('awaiting_upi');
-        setItems([]);
+        // Keep cart until payment succeeds so a failed/cancelled pay still has items.
+        refreshCartBadge();
         return;
       }
 
@@ -355,9 +368,11 @@ export default function CheckoutPage() {
       });
       setPayPhase('success');
       setItems([]);
+      refreshCartBadge();
     } catch (err) {
       setPayPhase('form');
       setError(err.message || 'Payment failed');
+      refreshCartBadge();
     } finally {
       setBusy(false);
     }
@@ -369,7 +384,8 @@ export default function CheckoutPage() {
     try {
       await api.cancelPayment(pendingOrderId, token);
       setPayPhase('failed');
-      setError('Payment cancelled. You can try again from cart.');
+      setError('Payment cancelled. Your items are still in the cart.');
+      refreshCartBadge();
     } catch (err) {
       setError(err.message || 'Could not cancel payment');
     } finally {
