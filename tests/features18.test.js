@@ -18,7 +18,10 @@ describe('marketplace feature APIs', () => {
   let token;
   let userId;
   let productId;
-  const phone = `${Date.now().toString().slice(-10)}`;
+  const phone = (() => {
+    const raw = `${Date.now()}${process.pid}${Math.floor(Math.random() * 1e9)}`;
+    return raw.replace(/\D/g, '').slice(-10).padStart(10, '9');
+  })();
 
   before(async () => {
     await mongoose.connection.asPromise();
@@ -84,7 +87,10 @@ describe('marketplace feature APIs', () => {
       value: 10,
       active: true,
     });
-    const guestPhone = `${(Date.now() + 3).toString().slice(-10)}`;
+    const guestPhone = (() => {
+      const raw = `${Date.now()}${process.pid}${Math.floor(Math.random() * 1e9)}8`;
+      return raw.replace(/\D/g, '').slice(-10).padStart(10, '8');
+    })();
     const guest = await request(app)
       .post('/api/violet/guest/session')
       .send({
