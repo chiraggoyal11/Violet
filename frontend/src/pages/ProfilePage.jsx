@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../api';
 import AddressFields from '../components/AddressFields';
+import ImageUploadZone from '../components/ImageUploadZone';
 import { isValidPincode } from '../data/geoAddress';
 import { formatPhoneDisplay } from '../utils/validation';
 import { useAuth } from '../AuthContext';
@@ -55,26 +56,28 @@ export default function ProfilePage() {
     }));
   }
 
-  async function onPhotoChange(e) {
-    const file = e.target.files?.[0];
+  async function onPhotoFiles(nextFiles) {
+    const file = nextFiles?.[0];
     if (!file) return;
     setPhotoBusy(true);
     setError('');
     setOk('');
+    const localUrl = URL.createObjectURL(file);
     try {
-      const localUrl = URL.createObjectURL(file);
       setPreview(localUrl);
       const data = await api.updateAvatar(file, token);
       if (!data.success) throw new Error(data.msg || 'Photo upload failed');
       setUserSession(token, data.user);
-      setPreview(data.user.avatar || localUrl);
+      const remote = data.user.avatar || '';
+      setPreview(remote || localUrl);
+      if (remote) URL.revokeObjectURL(localUrl);
       setOk('Profile photo updated.');
     } catch (err) {
+      URL.revokeObjectURL(localUrl);
       setPreview(user?.avatar || '');
       setError(err.message || 'Photo upload failed');
     } finally {
       setPhotoBusy(false);
-      e.target.value = '';
     }
   }
 
@@ -134,25 +137,18 @@ export default function ProfilePage() {
         <form className="form profile-form" onSubmit={onSubmit}>
           <fieldset className="form-section">
             <legend>Account</legend>
-            <div className="profile-photo-row">
-              <div className="profile-photo-preview" aria-hidden="true">
-                {preview ? (
-                  <img src={preview} alt="" />
-                ) : (
-                  <span>{(form.username || '?').slice(0, 2).toUpperCase()}</span>
-                )}
-              </div>
-              <div className="form-field">
-                <label htmlFor="avatar">Profile photo</label>
-                <input
-                  id="avatar"
-                  type="file"
-                  accept="image/*"
-                  onChange={onPhotoChange}
-                  disabled={photoBusy}
-                />
-                {photoBusy ? <p className="muted-link">Uploading…</p> : null}
-              </div>
+            <div className="form-field profile-photo-field">
+              <span className="field-label" id="avatar-label">
+                Profile photo
+              </span>
+              <ImageUploadZone
+                id="avatar"
+                label="Upload"
+                previewUrl={preview}
+                busy={photoBusy}
+                onFiles={onPhotoFiles}
+                hint="Click or drag and drop"
+              />
             </div>
             <div className="form-grid">
               <div className="form-field">
