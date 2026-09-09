@@ -22,8 +22,15 @@ const Product = require('../models/product');
 const Order = require('../models/order');
 const Notification = require('../models/notification');
 
-const phone = `${Date.now().toString().slice(-10)}`;
-const phone2 = `${(Date.now() + 1).toString().slice(-10)}`;
+function uniquePhone(salt = 0) {
+  // 10 digits; include pid + random so parallel CI jobs on a shared DB do not collide.
+  const raw = `${Date.now()}${process.pid}${Math.floor(Math.random() * 1e9)}${salt}`;
+  const digits = raw.replace(/\D/g, '').slice(-10);
+  return digits.padStart(10, '9');
+}
+
+const phone = uniquePhone(1);
+const phone2 = uniquePhone(2);
 const country_code = '+91';
 const validPassword = 'Secret1!';
 const newPassword = 'Reset123!';
@@ -130,7 +137,7 @@ describe('Violet API', () => {
       .send({
         username: 'OtherPerson',
         country_code,
-        phone_no: `${(Date.now() + 7).toString().slice(-10)}`,
+        phone_no: uniquePhone(7),
         password: validPassword,
         email: 'maker@example.com'
       })
