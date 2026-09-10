@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../AuthContext';
 import { colors } from '../theme';
 import LoginScreen from '../screens/LoginScreen';
@@ -102,15 +103,26 @@ function MessagesNavigator() {
   );
 }
 
+const TAB_ICONS: Record<keyof MainTabParamList, keyof typeof Ionicons.glyphMap> = {
+  ShopTab: 'storefront-outline',
+  CartTab: 'cart-outline',
+  OrdersTab: 'receipt-outline',
+  MessagesTab: 'chatbubbles-outline',
+  Profile: 'person-outline',
+};
+
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: { borderTopColor: colors.border },
-      }}
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name]} size={size} color={color} />
+        ),
+      })}
     >
       <Tab.Screen name="ShopTab" component={ShopNavigator} options={{ title: 'Shop' }} />
       <Tab.Screen name="CartTab" component={CartNavigator} options={{ title: 'Cart' }} />

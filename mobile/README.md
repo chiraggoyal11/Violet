@@ -38,9 +38,10 @@ npm run mobile
 
 ```bash
 npx expo start
+# or: npm start  (sets EXPO_ROUTER_DISABLE_RN_NAVIGATION_CHECK for React Navigation)
 ```
 
-Then press `i` / `a`, or scan the QR code with Expo Go.
+Then press `i` / `a`, or scan the QR code with Expo Go. For a quick browser smoke test: `npm run web`.
 
 ## What’s included (v1)
 
