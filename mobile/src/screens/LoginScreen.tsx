@@ -10,7 +10,8 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Screen from '../components/Screen';
 import { useAuth } from '../AuthContext';
-import { colors, spacing } from '../theme';
+import { spacing } from '../theme';
+import { ui } from '../ui';
 import type { AuthStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -37,14 +38,14 @@ export default function LoginScreen({ navigation }: Props) {
     <Screen title="Violet" subtitle="Sign in to shop handmade goods.">
       <View style={styles.row}>
         <TextInput
-          style={[styles.input, styles.code]}
+          style={[ui.input, styles.code]}
           value={countryCode}
           onChangeText={setCountryCode}
           autoCapitalize="none"
           placeholder="+91"
         />
         <TextInput
-          style={[styles.input, styles.flex]}
+          style={[ui.input, styles.flex]}
           value={phone}
           onChangeText={setPhone}
           keyboardType="number-pad"
@@ -53,21 +54,27 @@ export default function LoginScreen({ navigation }: Props) {
         />
       </View>
       <TextInput
-        style={styles.input}
+        style={ui.input}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         placeholder="Password"
       />
       <Pressable
-        style={[styles.button, busy && styles.disabled]}
+        style={[ui.button, busy && styles.disabled]}
         onPress={onSubmit}
         disabled={busy}
       >
-        <Text style={styles.buttonText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
+        <Text style={ui.buttonText}>{busy ? 'Signing in…' : 'Sign in'}</Text>
       </Pressable>
       <Pressable onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.link}>Create an account</Text>
+        <Text style={ui.link}>Create an account</Text>
+      </Pressable>
+      <Pressable onPress={() => navigation.navigate('ForgotPassword')}>
+        <Text style={ui.link}>Forgot password?</Text>
+      </Pressable>
+      <Pressable onPress={() => navigation.navigate('GuestCheckout')}>
+        <Text style={ui.link}>Continue as guest</Text>
       </Pressable>
     </Screen>
   );
@@ -77,28 +84,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
   code: { width: 84 },
-  input: {
-    backgroundColor: colors.surfaceStrong,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: colors.ink,
-  },
-  button: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
   disabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  link: {
-    textAlign: 'center',
-    color: colors.brand,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-  },
 });
