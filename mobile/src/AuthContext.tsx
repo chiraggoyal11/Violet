@@ -28,6 +28,7 @@ type AuthContextValue = {
   booting: boolean;
   login: (country_code: string, phone_no: string, password: string) => Promise<void>;
   register: (payload: Record<string, unknown>) => Promise<void>;
+  adoptSession: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   updateLocalUser: (user: User) => void;
@@ -105,6 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [persistSession],
   );
 
+  const adoptSession = useCallback(
+    async (nextToken: string, nextUser: User) => {
+      await persistSession(nextToken, nextUser);
+    },
+    [persistSession],
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -112,11 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       booting,
       login,
       register,
+      adoptSession,
       logout,
       refreshMe,
       updateLocalUser: setUser,
     }),
-    [user, token, booting, login, register, logout, refreshMe],
+    [user, token, booting, login, register, adoptSession, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

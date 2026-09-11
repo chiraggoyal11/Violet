@@ -14,9 +14,9 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import { colors, spacing } from '../theme';
-import type { MessagesStackParamList } from '../navigation/types';
+import type { AccountStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<MessagesStackParamList, 'Thread'>;
+type Props = NativeStackScreenProps<AccountStackParamList, 'Thread'>;
 
 export default function ThreadScreen({ route }: Props) {
   const { conversationId } = route.params;

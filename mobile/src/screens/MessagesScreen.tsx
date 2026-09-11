@@ -12,9 +12,9 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import Screen from '../components/Screen';
 import { colors, spacing } from '../theme';
-import type { MessagesStackParamList } from '../navigation/types';
+import type { AccountStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<MessagesStackParamList, 'Inbox'>;
+type Props = NativeStackScreenProps<AccountStackParamList, 'Inbox'>;
 
 export default function MessagesScreen({ navigation }: Props) {
   const { token } = useAuth();
