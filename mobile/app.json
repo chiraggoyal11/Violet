@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Violet",
+    "slug": "violet-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "violet",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.violet.marketplace"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F3F8",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.violet.marketplace",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiUrl": "${EXPO_PUBLIC_API_URL}"
+    }
+  }
+}

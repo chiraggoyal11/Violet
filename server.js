@@ -25,14 +25,41 @@ app.use(helmet({
 }));
 app.use(morgan('dev'));
 
-const corsOrigin =
-  process.env.CORS_ORIGIN ||
-  process.env.RENDER_EXTERNAL_URL ||
-  true;
-app.use(cors({
-  origin: corsOrigin,
-  credentials: true
-}));
+/** Comma-separated allowlist, or reflect request origin in loose/dev mode. */
+function buildCorsOrigin() {
+  const raw =
+    process.env.CORS_ORIGIN ||
+    process.env.RENDER_EXTERNAL_URL ||
+    '';
+  if (!raw || raw === '*' || raw === 'true') {
+    return true;
+  }
+  const allowed = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isDev = process.env.NODE_ENV !== 'production';
+  return (origin, callback) => {
+    // Non-browser clients (Expo Go / native) send no Origin header.
+    if (!origin) return callback(null, true);
+    if (allowed.includes(origin)) return callback(null, true);
+    if (
+      isDev &&
+      /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/i.test(
+        origin,
+      )
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked for origin ${origin}`));
+  };
+}
+app.use(
+  cors({
+    origin: buildCorsOrigin(),
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false }));
 
