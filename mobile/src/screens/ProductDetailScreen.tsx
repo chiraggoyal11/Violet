@@ -244,19 +244,39 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
           </Pressable>
 
           <View style={styles.actions}>
-            <Pressable style={ui.buttonSecondary} onPress={toggleFavorite} disabled={busy}>
+            <Pressable
+              style={[ui.buttonSecondary, styles.actionBtn]}
+              onPress={toggleFavorite}
+              disabled={busy}
+            >
               <Text style={ui.buttonSecondaryText}>{favorited ? 'Unfavorite' : 'Favorite'}</Text>
             </Pressable>
-            <Pressable style={ui.buttonSecondary} onPress={addWishlist} disabled={busy}>
+            <Pressable
+              style={[ui.buttonSecondary, styles.actionBtn]}
+              onPress={addWishlist}
+              disabled={busy}
+            >
               <Text style={ui.buttonSecondaryText}>Wishlist</Text>
             </Pressable>
-            <Pressable style={ui.buttonSecondary} onPress={() => setMessageOpen(true)} disabled={busy}>
+            <Pressable
+              style={[ui.buttonSecondary, styles.actionBtn]}
+              onPress={() => setMessageOpen(true)}
+              disabled={busy}
+            >
               <Text style={ui.buttonSecondaryText}>Message</Text>
             </Pressable>
-            <Pressable style={ui.buttonSecondary} onPress={() => setOfferOpen(true)} disabled={busy}>
+            <Pressable
+              style={[ui.buttonSecondary, styles.actionBtn]}
+              onPress={() => setOfferOpen(true)}
+              disabled={busy}
+            >
               <Text style={ui.buttonSecondaryText}>Offer</Text>
             </Pressable>
-            <Pressable style={ui.buttonSecondary} onPress={() => setReportOpen(true)} disabled={busy}>
+            <Pressable
+              style={[ui.buttonSecondary, styles.actionBtn]}
+              onPress={() => setReportOpen(true)}
+              disabled={busy}
+            >
               <Text style={ui.buttonSecondaryText}>Report</Text>
             </Pressable>
           </View>
@@ -386,7 +406,16 @@ const styles = StyleSheet.create({
   price: { fontSize: 24, fontWeight: '800', color: colors.accent },
   detail: { color: colors.inkSoft, fontSize: 16, lineHeight: 22 },
   seller: { color: colors.brand, fontWeight: '700' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  actionBtn: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 100,
+  },
   section: { fontSize: 18, fontWeight: '800', color: colors.brand, marginTop: spacing.sm },
   disabled: { opacity: 0.55 },
   modalBackdrop: {

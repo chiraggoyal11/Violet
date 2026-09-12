@@ -38,13 +38,12 @@ function buildCorsOrigin() {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const isDev = process.env.NODE_ENV !== 'production';
   return (origin, callback) => {
-    // Non-browser clients (Expo Go / native) send no Origin header.
+    // Native Expo / mobile clients often send no Origin header.
     if (!origin) return callback(null, true);
     if (allowed.includes(origin)) return callback(null, true);
+    // Always allow local Expo web / emulators so shop can load during development.
     if (
-      isDev &&
       /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/i.test(
         origin,
       )

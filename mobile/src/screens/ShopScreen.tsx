@@ -3,6 +3,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -68,16 +69,17 @@ export default function ShopScreen({ navigation }: Props) {
           load();
         }}
       />
-      <FlatList
+      <ScrollView
         horizontal
-        data={['', ...PRODUCT_CATEGORIES]}
-        keyExtractor={(item) => item || 'all'}
         showsHorizontalScrollIndicator={false}
+        style={styles.chipList}
         contentContainerStyle={styles.chips}
-        renderItem={({ item }) => {
+      >
+        {['', ...PRODUCT_CATEGORIES].map((item) => {
           const active = category === item;
           return (
             <Pressable
+              key={item || 'all'}
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => {
                 setCategory(item);
@@ -89,8 +91,8 @@ export default function ShopScreen({ navigation }: Props) {
               </Text>
             </Pressable>
           );
-        }}
-      />
+        })}
+      </ScrollView>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <FlatList
         style={{ flex: 1 }}
@@ -135,7 +137,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     fontSize: 16,
   },
-  chips: { gap: 8, paddingBottom: spacing.sm },
+  chipList: { flexGrow: 0, maxHeight: 44, marginBottom: spacing.sm },
+  chips: { alignItems: 'center', gap: 8, paddingRight: spacing.sm },
   chip: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -144,6 +147,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
+    alignSelf: 'center',
   },
   chipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   chipText: { color: colors.inkSoft, fontWeight: '700', fontSize: 13 },
