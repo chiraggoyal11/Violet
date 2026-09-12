@@ -36,6 +36,8 @@ export default function GuestCheckoutScreen(_props: Props) {
       });
       if (!data?.token || !data?.user) throw new Error(data?.msg || 'Guest session failed');
       await adoptSession(data.token, data.user);
+      const { closeAuth } = await import('../navigation/ref');
+      closeAuth();
     } catch (err: any) {
       Alert.alert('Guest checkout failed', err?.message || 'Try again');
     } finally {

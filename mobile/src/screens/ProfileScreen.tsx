@@ -3,6 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../AuthContext';
 import Screen from '../components/Screen';
+import RequireAuth from '../components/RequireAuth';
 import { API_URL } from '../config';
 import { colors, spacing } from '../theme';
 import { ui } from '../ui';
@@ -26,56 +27,58 @@ export default function ProfileScreen({ navigation }: Props) {
   const { user, logout } = useAuth();
 
   return (
-    <Screen title="Account" subtitle="Your Violet hub.">
-      <View style={ui.card}>
-        <Text style={styles.name}>{user?.username}</Text>
-        {user?.email ? <Text style={styles.meta}>{String(user.email)}</Text> : null}
-        {user?.phone_no ? (
-          <Text style={styles.meta}>
-            {user.country_code || ''} {user.phone_no}
-          </Text>
-        ) : null}
-        <Text style={styles.role}>Signed in as {String(user?.role || 'buyer')}</Text>
-      </View>
+    <RequireAuth title="Account" subtitle="Sign in to manage your Violet account.">
+      <Screen title="Account" subtitle="Your Violet hub.">
+        <View style={ui.card}>
+          <Text style={styles.name}>{user?.username}</Text>
+          {user?.email ? <Text style={styles.meta}>{String(user.email)}</Text> : null}
+          {user?.phone_no ? (
+            <Text style={styles.meta}>
+              {user.country_code || ''} {user.phone_no}
+            </Text>
+          ) : null}
+          <Text style={styles.role}>Signed in as {String(user?.role || 'buyer')}</Text>
+        </View>
 
-      {MENU.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => (
+        {MENU.filter((item) => !item.adminOnly || user?.role === 'admin').map((item) => (
+          <Pressable
+            key={item.screen}
+            style={ui.menuRow}
+            onPress={() => navigation.navigate(item.screen as any)}
+          >
+            <Text style={ui.menuLabel}>{item.label}</Text>
+            <Text style={ui.menuChevron}>›</Text>
+          </Pressable>
+        ))}
+
         <Pressable
-          key={item.screen}
           style={ui.menuRow}
-          onPress={() => navigation.navigate(item.screen as any)}
+          onPress={() => navigation.getParent()?.navigate('SellTab', { screen: 'MyListings' })}
         >
-          <Text style={ui.menuLabel}>{item.label}</Text>
+          <Text style={ui.menuLabel}>My listings</Text>
           <Text style={ui.menuChevron}>›</Text>
         </Pressable>
-      ))}
 
-      <Pressable
-        style={ui.menuRow}
-        onPress={() => navigation.getParent()?.navigate('SellTab', { screen: 'MyListings' })}
-      >
-        <Text style={ui.menuLabel}>My listings</Text>
-        <Text style={ui.menuChevron}>›</Text>
-      </Pressable>
+        <View style={ui.card}>
+          <Text style={ui.label}>API</Text>
+          <Text style={styles.api} selectable>
+            {API_URL}
+          </Text>
+        </View>
 
-      <View style={ui.card}>
-        <Text style={ui.label}>API</Text>
-        <Text style={styles.api} selectable>
-          {API_URL}
-        </Text>
-      </View>
-
-      <Pressable
-        style={styles.signOut}
-        onPress={() => {
-          Alert.alert('Sign out?', undefined, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Sign out', style: 'destructive', onPress: () => void logout() },
-          ]);
-        }}
-      >
-        <Text style={ui.buttonText}>Sign out</Text>
-      </Pressable>
-    </Screen>
+        <Pressable
+          style={styles.signOut}
+          onPress={() => {
+            Alert.alert('Sign out?', undefined, [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Sign out', style: 'destructive', onPress: () => void logout() },
+            ]);
+          }}
+        >
+          <Text style={ui.buttonText}>Sign out</Text>
+        </Pressable>
+      </Screen>
+    </RequireAuth>
   );
 }
 

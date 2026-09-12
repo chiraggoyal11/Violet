@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import Screen from '../components/Screen';
+import RequireAuth from '../components/RequireAuth';
 import { formatPrice } from '../components/ProductCard';
 import { colors, spacing } from '../theme';
 import { ui } from '../ui';
@@ -93,9 +94,11 @@ export default function OrdersScreen() {
   }
 
   return (
+    <RequireAuth title="Orders" subtitle="Sign in to see your purchases.">
     <Screen title="Orders" subtitle="Your Violet purchases." scroll={false} loading={loading && !orders.length}>
       {error ? <Text style={ui.error}>{error}</Text> : null}
       <FlatList
+        style={{ flex: 1 }}
         data={orders}
         keyExtractor={(item) => item._id}
         contentContainerStyle={styles.list}
@@ -174,6 +177,7 @@ export default function OrdersScreen() {
         }}
       />
     </Screen>
+    </RequireAuth>
   );
 }
 

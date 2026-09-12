@@ -60,7 +60,7 @@ export default function MessagesScreen({ navigation }: Props) {
         ListEmptyComponent={
           !loading ? (
             <Text style={styles.empty}>
-              No conversations yet. Message a seller from a product on the web for now.
+              No conversations yet. Message a seller from any product page.
             </Text>
           ) : null
         }

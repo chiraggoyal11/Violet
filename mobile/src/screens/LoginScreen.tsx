@@ -10,6 +10,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Screen from '../components/Screen';
 import { useAuth } from '../AuthContext';
+import { closeAuth } from '../navigation/ref';
 import { spacing } from '../theme';
 import { ui } from '../ui';
 import type { AuthStackParamList } from '../navigation/types';
@@ -27,6 +28,7 @@ export default function LoginScreen({ navigation }: Props) {
     setBusy(true);
     try {
       await login(countryCode.trim(), phone.trim(), password);
+      closeAuth();
     } catch (err: any) {
       Alert.alert('Sign in failed', err?.message || 'Try again');
     } finally {
@@ -75,6 +77,9 @@ export default function LoginScreen({ navigation }: Props) {
       </Pressable>
       <Pressable onPress={() => navigation.navigate('GuestCheckout')}>
         <Text style={ui.link}>Continue as guest</Text>
+      </Pressable>
+      <Pressable onPress={closeAuth}>
+        <Text style={ui.link}>Browse shop without signing in</Text>
       </Pressable>
     </Screen>
   );

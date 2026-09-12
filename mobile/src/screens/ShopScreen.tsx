@@ -93,6 +93,7 @@ export default function ShopScreen({ navigation }: Props) {
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <FlatList
+        style={{ flex: 1 }}
         data={products}
         keyExtractor={(item) => item._id}
         numColumns={2}

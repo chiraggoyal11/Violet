@@ -14,6 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import Screen from '../components/Screen';
+import RequireAuth from '../components/RequireAuth';
 import { PRODUCT_CATEGORIES } from '../data/categories';
 import { colors, spacing } from '../theme';
 import { ui } from '../ui';
@@ -119,7 +120,8 @@ export default function SellScreen({ navigation }: Props) {
   }
 
   return (
-    <Screen title="Sell" subtitle={`List a product as ${user?.username || 'you'}.`}>
+    <RequireAuth title="Sell" subtitle="Sign in to list handmade goods.">
+      <Screen title="Sell" subtitle={`List a product as ${user?.username || 'you'}.`}>
       <Pressable style={ui.buttonSecondary} onPress={() => navigation.navigate('MyListings')}>
         <Text style={ui.buttonSecondaryText}>My listings</Text>
       </Pressable>
@@ -194,7 +196,8 @@ export default function SellScreen({ navigation }: Props) {
       <Pressable style={[ui.button, busy && styles.disabled]} onPress={submit} disabled={busy}>
         <Text style={ui.buttonText}>{busy ? 'Publishing…' : 'Publish listing'}</Text>
       </Pressable>
-    </Screen>
+      </Screen>
+    </RequireAuth>
   );
 }
 

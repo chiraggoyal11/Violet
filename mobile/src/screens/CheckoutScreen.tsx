@@ -20,7 +20,7 @@ type Props = NativeStackScreenProps<CartStackParamList, 'Checkout'>;
 type PayMethod = 'cod' | 'upi' | 'card';
 
 function formatCardNumber(value: string) {
-  return value.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+  return value.replace(/\D/g, '').slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ').trim();
 }
 
 function formatExpiry(value: string) {
@@ -57,20 +57,59 @@ export default function CheckoutScreen({ navigation }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.pendingPayment(token);
+        const pending = data?.pending || data?.order;
+        if (cancelled || !pending?._id) return;
+        if (pending.paymentMethod === 'upi' && pending.paymentStatus === 'pending') {
+          setAwaitingUpi({
+            orderId: pending._id,
+            detail: pending.paymentDetail || data?.payment?.detail,
+          });
+          startUpiPoll(pending._id);
+        } else {
+          Alert.alert(
+            'Payment in progress',
+            'You already have a pending payment. Finish or cancel it from Orders.',
+          );
+        }
+      } catch {
+        /* no pending payment */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   function goOrders() {
     navigation.popToTop();
     navigation.getParent()?.navigate('OrdersTab');
   }
 
-  async function validateCoupon() {
+  async function applyCoupon() {
     if (!token || !couponCode.trim()) return;
     setCouponBusy(true);
     try {
       const cart = await api.getCart(token);
       const subtotal = Number(cart.total || 0);
       const data = await api.validateCoupon(couponCode.trim(), subtotal, token);
-      setCouponDiscount(data.coupon || data);
-      Alert.alert('Coupon applied', data.msg || 'Discount ready.');
+      setCouponDiscount({
+        code: data.coupon?.code || couponCode.trim().toUpperCase(),
+        discount: data.discount,
+        total: data.total,
+        ...data.coupon,
+      });
+      Alert.alert(
+        'Coupon applied',
+        data.discount != null
+          ? `Saved ${formatPrice(data.discount)}. New total ${formatPrice(data.total)}.`
+          : data.msg || 'Discount ready.',
+      );
     } catch (err: any) {
       setCouponDiscount(null);
       Alert.alert('Invalid coupon', err?.message || 'Try another code');
@@ -121,8 +160,8 @@ export default function CheckoutScreen({ navigation }: Props) {
     }
     if (paymentMethod === 'card') {
       const digits = cardNumber.replace(/\s+/g, '');
-      if (!/^\d{16}$/.test(digits)) {
-        Alert.alert('Card number', 'Enter a 16-digit card number.');
+      if (!/^\d{13,19}$/.test(digits)) {
+        Alert.alert('Card number', 'Enter a valid card number (13–19 digits).');
         return;
       }
       if (!cardName.trim()) {
@@ -180,7 +219,16 @@ export default function CheckoutScreen({ navigation }: Props) {
       }
 
       if (data.action === 'razorpay' && data.order?._id) {
-        // Demo / fallback: confirm with synthetic proof when gateway UI is unavailable.
+        // Without a native Razorpay SDK, only auto-confirm in demo mode.
+        const cfg = await api.paymentConfig(token).catch(() => null);
+        const demo = cfg?.demo || cfg?.payment?.demo || cfg?.mode === 'demo';
+        if (!demo) {
+          Alert.alert(
+            'Card payments',
+            'Live Razorpay checkout is not embedded in this mobile build yet. Use COD or UPI, or pay on the website.',
+          );
+          return;
+        }
         try {
           await api.confirmPayment(
             data.order._id,
@@ -328,7 +376,7 @@ export default function CheckoutScreen({ navigation }: Props) {
               onChangeText={(v) => setCardNumber(formatCardNumber(v))}
               placeholder="4111 1111 1111 1111"
               keyboardType="number-pad"
-              maxLength={19}
+              maxLength={23}
             />
           </View>
           <View style={styles.field}>
@@ -375,7 +423,7 @@ export default function CheckoutScreen({ navigation }: Props) {
           />
           <Pressable
             style={[ui.buttonSecondary, styles.couponBtn, couponBusy && styles.disabled]}
-            onPress={validateCoupon}
+            onPress={applyCoupon}
             disabled={couponBusy}
           >
             <Text style={ui.buttonSecondaryText}>{couponBusy ? '…' : 'Apply'}</Text>

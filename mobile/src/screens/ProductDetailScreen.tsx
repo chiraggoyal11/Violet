@@ -14,6 +14,7 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import Screen from '../components/Screen';
 import { formatPrice } from '../components/ProductCard';
+import { openAuth } from '../navigation/ref';
 import { colors, spacing } from '../theme';
 import { ui } from '../ui';
 import type { ShopStackParamList } from '../navigation/types';
@@ -68,7 +69,10 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
   }, [id, token]);
 
   function needAuth() {
-    Alert.alert('Sign in required', 'Log in to use this feature.');
+    Alert.alert('Sign in required', 'Log in to use this feature.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign in', onPress: () => openAuth() },
+    ]);
   }
 
   async function addToCart() {
@@ -200,7 +204,8 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
     }
   }
 
-  const image = product?.ImageUrls?.[0] || product?.ImageUrl;
+  const image =
+    product?.ImageUrls?.[0] || product?.ImageUrl || product?.Images?.[0];
   const sold = product?.status === 'sold' || Number(product?.stock) === 0;
   const sellerUsername = seller?.username || product?.sellerUsername;
 

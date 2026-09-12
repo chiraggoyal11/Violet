@@ -1,27 +1,31 @@
 import React from 'react';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing } from '../theme';
 
 type Product = {
   _id: string;
-  Product_Name: string;
+  Product_Name?: string;
   Product_Detail?: string;
-  Price: string;
+  Price?: string | number;
   category?: string;
   ImageUrl?: string;
   ImageUrls?: string[];
+  Images?: string[];
 };
 
 export function formatPrice(value?: string | number) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
   return `₹${n.toFixed(2)}`;
+}
+
+function productImage(product: Product) {
+  return (
+    product.ImageUrls?.[0] ||
+    product.ImageUrl ||
+    product.Images?.[0] ||
+    null
+  );
 }
 
 export default function ProductCard({
@@ -31,24 +35,21 @@ export default function ProductCard({
   product: Product;
   onPress: () => void;
 }) {
-  const image = product.ImageUrls?.[0] || product.ImageUrl || null;
+  const image = productImage(product);
+  const name = product.Product_Name || 'Untitled';
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.thumb}>
         {image ? (
           <Image source={{ uri: image }} style={styles.image} />
         ) : (
-          <Text style={styles.placeholder}>
-            {product.Product_Name?.slice(0, 1) || '?'}
-          </Text>
+          <Text style={styles.placeholder}>{name.slice(0, 1).toUpperCase()}</Text>
         )}
       </View>
       <View style={styles.copy}>
-        {product.category ? (
-          <Text style={styles.category}>{product.category}</Text>
-        ) : null}
+        {product.category ? <Text style={styles.category}>{product.category}</Text> : null}
         <Text style={styles.name} numberOfLines={2}>
-          {product.Product_Name}
+          {name}
         </Text>
         <Text style={styles.price}>{formatPrice(product.Price)}</Text>
       </View>

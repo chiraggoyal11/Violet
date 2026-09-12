@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../AuthContext';
 import { colors } from '../theme';
+import { navigationRef } from './ref';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
@@ -35,10 +36,12 @@ import type {
   CartStackParamList,
   MainTabParamList,
   OrdersStackParamList,
+  RootStackParamList,
   SellStackParamList,
   ShopStackParamList,
 } from './types';
 
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const ShopStack = createNativeStackNavigator<ShopStackParamList>();
 const CartStack = createNativeStackNavigator<CartStackParamList>();
@@ -61,11 +64,7 @@ function AuthNavigator() {
 function ShopNavigator() {
   return (
     <ShopStack.Navigator>
-      <ShopStack.Screen
-        name="ShopHome"
-        component={ShopScreen}
-        options={{ headerShown: false }}
-      />
+      <ShopStack.Screen name="ShopHome" component={ShopScreen} options={{ headerShown: false }} />
       <ShopStack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}
@@ -83,11 +82,7 @@ function ShopNavigator() {
 function CartNavigator() {
   return (
     <CartStack.Navigator>
-      <CartStack.Screen
-        name="CartHome"
-        component={CartScreen}
-        options={{ headerShown: false }}
-      />
+      <CartStack.Screen name="CartHome" component={CartScreen} options={{ headerShown: false }} />
       <CartStack.Screen
         name="Checkout"
         component={CheckoutScreen}
@@ -108,11 +103,7 @@ function OrdersNavigator() {
 function SellNavigator() {
   return (
     <SellStack.Navigator>
-      <SellStack.Screen
-        name="SellHome"
-        component={SellScreen}
-        options={{ headerShown: false }}
-      />
+      <SellStack.Screen name="SellHome" component={SellScreen} options={{ headerShown: false }} />
       <SellStack.Screen
         name="MyListings"
         component={MyListingsScreen}
@@ -125,11 +116,7 @@ function SellNavigator() {
 function AccountNavigator() {
   return (
     <AccountStack.Navigator>
-      <AccountStack.Screen
-        name="AccountHome"
-        component={ProfileScreen}
-        options={{ headerShown: false }}
-      />
+      <AccountStack.Screen name="AccountHome" component={ProfileScreen} options={{ headerShown: false }} />
       <AccountStack.Screen
         name="EditProfile"
         component={EditProfileScreen}
@@ -196,6 +183,36 @@ const TAB_ICONS: Record<keyof MainTabParamList, keyof typeof Ionicons.glyphMap> 
 };
 
 function MainTabs() {
+  const { token } = useAuth();
+  const [cartCount, setCartCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!token) {
+        setCartCount(0);
+        setMsgCount(0);
+        return;
+      }
+      try {
+        const { api } = await import('../api');
+        const [cart, msgs] = await Promise.all([
+          api.cartCount(token).catch(() => null),
+          api.unreadMessageCount(token).catch(() => null),
+        ]);
+        if (cancelled) return;
+        setCartCount(Number(cart?.count || cart?.cartCount || 0));
+        setMsgCount(Number(msgs?.unread || msgs?.count || 0));
+      } catch {
+        /* ignore badge errors */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -210,15 +227,29 @@ function MainTabs() {
     >
       <Tab.Screen name="ShopTab" component={ShopNavigator} options={{ title: 'Shop' }} />
       <Tab.Screen name="SellTab" component={SellNavigator} options={{ title: 'Sell' }} />
-      <Tab.Screen name="CartTab" component={CartNavigator} options={{ title: 'Cart' }} />
+      <Tab.Screen
+        name="CartTab"
+        component={CartNavigator}
+        options={{
+          title: 'Cart',
+          tabBarBadge: cartCount > 0 ? cartCount : undefined,
+        }}
+      />
       <Tab.Screen name="OrdersTab" component={OrdersNavigator} options={{ title: 'Orders' }} />
-      <Tab.Screen name="AccountTab" component={AccountNavigator} options={{ title: 'Account' }} />
+      <Tab.Screen
+        name="AccountTab"
+        component={AccountNavigator}
+        options={{
+          title: 'Account',
+          tabBarBadge: msgCount > 0 ? msgCount : undefined,
+        }}
+      />
     </Tab.Navigator>
   );
 }
 
 export default function RootNavigator() {
-  const { token, booting } = useAuth();
+  const { booting } = useAuth();
 
   if (booting) {
     return (
@@ -236,8 +267,15 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      {token ? <MainTabs /> : <AuthNavigator />}
+    <NavigationContainer ref={navigationRef}>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="Main" component={MainTabs} />
+        <RootStack.Screen
+          name="Auth"
+          component={AuthNavigator}
+          options={{ presentation: 'modal' }}
+        />
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }

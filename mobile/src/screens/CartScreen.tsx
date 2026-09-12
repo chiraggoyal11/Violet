@@ -15,6 +15,8 @@ import Screen from '../components/Screen';
 import { formatPrice } from '../components/ProductCard';
 import { colors, spacing } from '../theme';
 import { ui } from '../ui';
+import RequireAuth from '../components/RequireAuth';
+import { openAuth } from '../navigation/ref';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CartStackParamList } from '../navigation/types';
 
@@ -197,52 +199,55 @@ export default function CartScreen({ navigation }: Props) {
   }
 
   return (
-    <Screen title="Cart" subtitle="Review before checkout." scroll={false} loading={loading}>
-      {error ? <Text style={ui.error}>{error}</Text> : null}
-      <FlatList
-        data={items}
-        keyExtractor={(item) => `cart-${item.product_id}`}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          items.length ? <Text style={styles.section}>In cart</Text> : null
-        }
-        ListEmptyComponent={<Text style={ui.empty}>Your cart is empty.</Text>}
-        ListFooterComponent={
-          <View style={styles.savedBlock}>
-            <Text style={styles.section}>Saved for later</Text>
-            {!saved.length ? <Text style={ui.muted}>Nothing saved yet.</Text> : null}
-            {saved.map((item) => (
-              <CartRow
-                key={`saved-${item.product_id}`}
-                item={item}
-                mode="saved"
-                busy={busy}
-                onMove={moveSaved}
-                onRemove={removeSaved}
-              />
-            ))}
+    <RequireAuth title="Cart" subtitle="Sign in to review your cart." onSignIn={openAuth}>
+      <Screen title="Cart" subtitle="Review before checkout." scroll={false} loading={loading}>
+        {error ? <Text style={ui.error}>{error}</Text> : null}
+        <FlatList
+          style={{ flex: 1 }}
+          data={items}
+          keyExtractor={(item) => `cart-${item.product_id}`}
+          contentContainerStyle={styles.list}
+          ListHeaderComponent={
+            items.length ? <Text style={styles.section}>In cart</Text> : null
+          }
+          ListEmptyComponent={<Text style={ui.empty}>Your cart is empty.</Text>}
+          ListFooterComponent={
+            <View style={styles.savedBlock}>
+              <Text style={styles.section}>Saved for later</Text>
+              {!saved.length ? <Text style={ui.muted}>Nothing saved yet.</Text> : null}
+              {saved.map((item) => (
+                <CartRow
+                  key={`saved-${item.product_id}`}
+                  item={item}
+                  mode="saved"
+                  busy={busy}
+                  onMove={moveSaved}
+                  onRemove={removeSaved}
+                />
+              ))}
+            </View>
+          }
+          renderItem={({ item }) => (
+            <CartRow
+              item={item}
+              mode="cart"
+              busy={busy}
+              onQty={setQty}
+              onSave={saveForLater}
+              onRemove={removeCart}
+            />
+          )}
+        />
+        {items.length ? (
+          <View style={styles.footer}>
+            <Text style={styles.total}>Total {formatPrice(total)}</Text>
+            <Pressable style={ui.button} onPress={() => navigation.navigate('Checkout')}>
+              <Text style={ui.buttonText}>Checkout</Text>
+            </Pressable>
           </View>
-        }
-        renderItem={({ item }) => (
-          <CartRow
-            item={item}
-            mode="cart"
-            busy={busy}
-            onQty={setQty}
-            onSave={saveForLater}
-            onRemove={removeCart}
-          />
-        )}
-      />
-      {items.length ? (
-        <View style={styles.footer}>
-          <Text style={styles.total}>Total {formatPrice(total)}</Text>
-          <Pressable style={ui.button} onPress={() => navigation.navigate('Checkout')}>
-            <Text style={ui.buttonText}>Checkout</Text>
-          </Pressable>
-        </View>
-      ) : null}
-    </Screen>
+        ) : null}
+      </Screen>
+    </RequireAuth>
   );
 }
 

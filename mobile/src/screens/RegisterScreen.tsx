@@ -34,6 +34,8 @@ export default function RegisterScreen({ navigation }: Props) {
         phone_no: phone.trim(),
         password,
       });
+      const { closeAuth } = await import('../navigation/ref');
+      closeAuth();
     } catch (err: any) {
       Alert.alert('Registration failed', err?.message || 'Try again');
     } finally {
