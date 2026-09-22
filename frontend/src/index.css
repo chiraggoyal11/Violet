@@ -2097,6 +2097,13 @@ img {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .hero-media {
+    animation: none;
+    transform: none;
+  }
+}
+
 @media (max-width: 640px) {
   .site-header {
     padding: 0.65rem 0.9rem;
