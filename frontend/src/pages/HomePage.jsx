@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../AuthContext';
 import ProductCard, { SkeletonGrid } from '../components/ProductCard';
 import { PRODUCT_CATEGORIES } from '../data/categories';
+import heroImage from '../assets/violet-home-hero.jpg';
 
 const PREVIEW_LIMIT = 8;
 
@@ -101,7 +102,17 @@ export default function HomePage() {
   return (
     <>
       <section className="hero" aria-label="Violet introduction">
-        <div className="hero-media" aria-hidden="true" />
+        <div className="hero-media" aria-hidden="true">
+          <img
+            className="hero-media-img"
+            src={heroImage}
+            alt=""
+            width={1920}
+            height={1080}
+            decoding="async"
+            fetchPriority="high"
+          />
+        </div>
         <div className="hero-content">
           <p className="hero-brand">Violet</p>
           <h1>List handmade goods. Find what feels like home.</h1>
